@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD)
+# Product Requirements Document: {{PROJECT_NAME}}
 
 <!-- AGENT: Optimized for agent consumption per docs/documentation.md -->
 <!-- AGENT: Requirement template: <a id="req-xx-nnn"></a> ### REQ-XX-NNN: Name -->

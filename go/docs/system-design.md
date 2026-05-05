@@ -1,4 +1,4 @@
-# System Design
+# System Design Document: {{PROJECT_NAME}}
 
 <!-- AGENT: This is the tactical implementation reference -->
 <!-- AGENT: Source code is authoritative for types, interfaces, and constants -->

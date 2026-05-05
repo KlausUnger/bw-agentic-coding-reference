@@ -80,11 +80,25 @@ Check all documents in `docs/` and `CLAUDE.md` for:
 
 Full validation checklist: `docs/documentation.md` (Validation Checklist section).
 
+### 8. Section Brevity
+
+Apply the section-scope "So What?" rule from `docs/documentation.md#apply-so-what-at-section-scope`.
+
+For `docs/system-design.md` and `docs/prd.md`, count lines per section (block bounded by sibling-or-higher Markdown heading). Flag every section over 100 lines as a candidate for review. Section length alone is not a finding — Implementation Order tables, multi-axis contracts, and Level 3 detail blocks may legitimately exceed the threshold.
+
+For each flagged section, dispatch a sub-agent to apply the section-scope "So What?" test:
+
+- Could two adjacent paragraphs collapse to one?
+- Could a prose block become a table?
+- Does any rule appear in more than one section without a cross-reference?
+
+The sub-agent returns advisory findings only (`[BREVITY]` severity). Do not block on this check; long sections that survive review are not violations.
+
 ## Output
 
 Report findings organized by area. For each issue, state:
 - **File and line** (e.g., `.claude/agents/test-reviewer.md:44`)
 - **What is wrong** (e.g., "Skill reference 'code-quality-review' not found")
-- **Severity**: `[STALE]` for outdated references, `[DUPLICATION]` for content that belongs elsewhere, `[BOUNDARY]` for abstraction-level violations, `[INCONSISTENCY]` for cross-document mismatches, `[PARITY]` for cross-tool mismatches, `[STYLE]` for writing standards violations
+- **Severity**: `[STALE]` for outdated references, `[DUPLICATION]` for content that belongs elsewhere, `[BOUNDARY]` for abstraction-level violations, `[INCONSISTENCY]` for cross-document mismatches, `[PARITY]` for cross-tool mismatches, `[STYLE]` for writing standards violations, `[BREVITY]` for section-scope "So What?" findings
 
 If all checks pass, state: "All documentation health checks passed."

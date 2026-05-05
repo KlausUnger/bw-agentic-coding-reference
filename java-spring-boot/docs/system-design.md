@@ -1,4 +1,4 @@
-# System Design Document: [Project Name]
+# System Design Document: {{PROJECT_NAME}}
 
 <!--
   TEMPLATE GUIDANCE:
@@ -32,9 +32,9 @@
 
 | Component | Technology | Version | Rationale |
 |-----------|-----------|---------|-----------|
-| Framework | Spring Boot | TBD | |
-| Build tool | Gradle (Groovy DSL) | TBD | |
-| Language | Java | TBD | |
+| Framework | Spring Boot | 4.0.6 | |
+| Build tool | Gradle (Groovy DSL) | 9.5.0 | |
+| Language | Java | 25 | |
 | JSON | Jackson | *(via Spring Boot)* | |
 | Logging | SLF4J + Logback | *(via Spring Boot)* | |
 | Testing | JUnit 5 + AssertJ | *(via Spring Boot)* | |
@@ -112,9 +112,11 @@ Do not use: `Manager`, `Helper`, `Utility`, `Handler`, `Processor`, `Base`, `Inf
 
 ```yaml
 spring:
-  main:
-    web-application-type: none
+  application:
+    name: reference
 ```
+
+See `src/main/resources/application.yml` for the authoritative configuration.
 
 ## 7. Error Handling
 
@@ -127,7 +129,7 @@ spring:
 ### 8.1 `settings.gradle`
 
 ```groovy
-rootProject.name = 'project-name'
+rootProject.name = 'reference'
 ```
 
 ### 8.2 `build.gradle` (Groovy DSL)
@@ -141,19 +143,19 @@ rootProject.name = 'project-name'
 ```text
          ┌─────────┐
          │  E2E    │  Full pipeline tests
-         │  (few)  │
+         │  (~5%)  │
         ┌┴─────────┴┐
         │Integration │  Real filesystem, real data
-        │ (several)  │
+        │  (~15%)    │
        ┌┴────────────┴┐
        │  Unit Tests   │  Pure functions, no I/O
-       │  (many)       │
+       │  (~80%)       │
        └───────────────┘
 ```
 
 | Layer | Scope | I/O | Framework | Count |
 |-------|-------|-----|-----------|-------|
-| **Unit** | Single class | None -- pure functions | No Spring context | ~80% of tests |
+| **Unit** | Single class | None — pure functions | No Spring context | ~80% of tests |
 | **Integration** | Multi-class | Real filesystem | Minimal Spring | ~15% of tests |
 | **E2E** | Full pipeline | Real filesystem, real output | `@SpringBootTest` | ~5% of tests |
 

@@ -20,7 +20,7 @@ The agent pipeline (product-requirements-expert, system-design-expert, feature-i
 
 We use option 2: skill-based architecture with a pipeline coordinator.
 
-Three layers separate concerns:
+Four layers separate concerns:
 
 | Layer | What It Contains | Where It Lives |
 |-------|-----------------|----------------|

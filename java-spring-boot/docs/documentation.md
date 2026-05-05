@@ -55,6 +55,16 @@ Every paragraph must justify its existence. Ask:
 
 If a paragraph fails, rewrite or remove it.
 
+### Apply "So What?" at Section Scope
+
+The paragraph-level test scales to sections. Long sections rot fastest: rationale gets restated, edge cases accumulate, and prose drifts past what tables would express. A section over 100 lines triggers a re-read pass — apply the paragraph test to each block, and ask three section-level questions:
+
+- Could two adjacent paragraphs collapse to one?
+- Could a prose block become a table?
+- Does any rule appear in more than one section without a cross-reference?
+
+Sections may exceed 100 lines when the topic warrants it (Implementation Order tables, multi-axis contracts, Level 3 detail per the abstraction-level rules). The threshold flags sections for review, not for unconditional trimming.
+
 ### Answer Questions Directly
 
 Start with the answer. Do not warm up. Do not build suspense. Use one of four answers: Yes. No. A number (with context). "I don't know" (with follow-up).
@@ -110,7 +120,7 @@ Every document — and every non-trivial section — is organized into 2–4 int
 - **docs/system-design.md:** The package structure diagram and overview paragraph are Level 1. Section headings for types, interfaces, and modules are Level 2. Per-type and per-method detail blocks are Level 3. Implementation order tables are Level 4.
 - **docs/adr/*.md:** Context + Decision are Level 1. Rationale and Alternatives are Level 2. Consequences and References are Level 3. ADRs are short enough to skip Level 4.
 
-The most common failure is starting a new section with implementation detail and no Level 1 paragraph. When reviewing, look at the first 200 words of each top-level heading and ask: does a non-specialist understand the purpose, conclusion, and scope from this alone?
+The recurring failure mode: a section opens with implementation detail and no Level 1 paragraph. When reviewing, read the first 200 words of each top-level heading and ask: does a non-specialist understand the purpose, conclusion, and scope from this alone?
 
 ## Document Ownership
 
@@ -193,9 +203,9 @@ The most common failure is starting a new section with implementation detail and
 - What should be built (→ PRD)
 - Build commands (→ CLAUDE.md)
 
-**Abstraction rule:** system-design.md describes design artifacts — contracts, invariants, ordering rules, atomicity guarantees, and fail-secure behaviors. It names each type, interface, and method once, says what contract it holds and which requirement it implements, and points at the source file. It does not replicate field lists, parameter lists, constant literals, or rule listings that already live in source — those rot silently when code changes and add no design information the reader cannot get from the code.
+**Abstraction rule:** system-design.md describes design artifacts — contracts, invariants, ordering rules, atomicity guarantees, and fail-secure behaviors. It names each type, interface, and method once, states the contract it holds and the requirement it implements, and points at the source file. Do not replicate field lists, parameter lists, constant literals, or rule listings that already live in source. Those duplicates rot silently when code changes and add no design information beyond the source.
 
-**Self-test before adding content to system-design.md:** Read the paragraph you are about to add and ask: "If I renamed a field, added a parameter, or changed a constant in source, would this paragraph become wrong without anyone noticing?" If yes, the paragraph is at the wrong level — either delete it (source is authoritative) or rewrite it as an invariant that survives the rename.
+**Self-test before adding content to system-design.md:** Read the paragraph and ask one question. "If I renamed a field, added a parameter, or changed a constant in source, would this paragraph become silently wrong?" If yes, the paragraph is at the wrong level. Either delete it (source is authoritative) or rewrite it as an invariant that survives the rename.
 
 **Example — wrong level (delete):**
 
@@ -403,7 +413,7 @@ Note: Anchor IDs use lowercase with hyphens. For requirements, use the short ID 
 
 ### Parseable Section Templates
 
-**Requirement (PRD):**
+**Requirement (PRD), full variant:**
 ```markdown
 <a id="req-xx-nnn"></a>
 ### REQ-XX-NNN: Name
@@ -437,6 +447,31 @@ Note: Anchor IDs use lowercase with hyphens. For requirements, use the short ID 
 ```
 
 Note: HTML anchors (`<a id="...">`) enable stable linking. Anchor IDs use lowercase with hyphens.
+
+**Requirement (PRD), lightweight variant:**
+
+A PRD may omit the `Input`, `Output`, `Behavior`, `Constraints`, and `Depends On` fields per requirement when:
+
+1. Requirements are predominantly behavioral specifications, not API contracts (no per-requirement parameter signatures to document).
+2. Acceptance Criteria are aggregated into a single document-level section because criteria cross requirement boundaries.
+3. Per-requirement Depends-On graphs collapse onto the same cross-cutting infrastructure block; explicit linkage adds noise without disambiguating.
+
+The PRD must declare the lightweight variant in a `Requirement format note` near the top of the Requirements section, stating the rationale for the omissions.
+
+```markdown
+<a id="req-xx-nnn"></a>
+### REQ-XX-NNN: Name
+
+**Status:** Approved | Proposed | Deprecated
+
+**Design Rationale:** See [ADR: Title](adr/YYYY-MM-DD-title.md).
+
+[Behavioral prose. Tables for structured contracts. Implementation links where needed.]
+
+**Implementation:** See [system-design.md#section](system-design.md#section)
+```
+
+The `Design Rationale` field remains mandatory whenever an ADR records the decision behind the requirement. The `Implementation` link remains mandatory whenever the requirement defers a mechanism (algorithm, schema, formula) to system-design.md.
 
 **ADR Structure:**
 ```markdown
@@ -522,6 +557,7 @@ Per [Writing Standards](#writing-standards) above:
 - [ ] Sentences under 30 words maximum; 70% under 20 words
 - [ ] No wordy phrases ("due to the fact that" → "because")
 - [ ] Every paragraph passes the "So what?" test
+- [ ] Every section over 100 lines passes the section-scope "So what?" review
 - [ ] Answers start with the answer, not warmup
 - [ ] Acronyms defined on first use
 - [ ] No subjective language or buzzwords

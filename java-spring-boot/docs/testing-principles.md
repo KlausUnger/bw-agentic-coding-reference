@@ -571,7 +571,7 @@ private Teacher createATeacher(String department) {
 }
 ```
 
-**Why unique generation matters for isolation:** When tests create persistent objects (e.g., database records), hard-coded values like `id=42` or `email="test@example.com"` will collide if two tests run against the same datastore — or if the same test runs twice without cleanup. Generating unique values from a counter or UUID ensures every test run produces distinct records, preventing flaky failures from data collisions and eliminating conflicts when parallel test suites share a database.
+**Why unique generation matters for isolation:** When tests create persistent objects (e.g., database records), hard-coded values like `id=42` or `email="test@example.com"` collide. Two tests against the same datastore conflict, and a re-run without cleanup conflicts with itself. Generate unique values from a counter or UUID. Each run produces distinct records, eliminating flaky failures from data collisions and conflicts when parallel suites share a database.
 
 ### Signal Irrelevance with SOME_ / ANY_ Constants
 
@@ -673,7 +673,7 @@ assertThat(payroll.getNetAmount())
     .isEqualByComparingTo(gross.subtract(gross.multiply(TAX_RATE)));
 ```
 
-**Rule:** If an expected value is a function of the inputs, express that function explicitly. Inline single-use computations directly into the `assertThat` chain rather than assigning them to intermediate variables — a variable only earns its name if it represents a meaningful domain concept (like `gross` above) or is referenced more than once. Pass-through variables like `expectedNet` just add lines without adding clarity.
+**Rule:** If an expected value is a function of the inputs, express that function explicitly. Inline single-use computations directly into the `assertThat` chain rather than assigning them to intermediate variables. A variable earns its name only when it represents a meaningful domain concept (like `gross` above) or is referenced more than once. Pass-through variables like `expectedNet` add lines without adding clarity.
 
 ### Create Test-Only Construction Paths for Expected Objects
 

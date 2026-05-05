@@ -1,4 +1,4 @@
-# Product Requirements Document: [Project Name]
+# Product Requirements Document: {{PROJECT_NAME}}
 
 <!--
   TEMPLATE GUIDANCE:
@@ -30,11 +30,14 @@
 
 <!-- Group requirements by functional area. Use tables with IDs, descriptions, and acceptance criteria. -->
 
+<!-- Requirement IDs follow the REQ-XX-NNN format with HTML anchors. -->
+<!-- See docs/documentation.md "Parseable Section Templates" for the full requirement format. -->
+
 ### 4.1 [Functional Area 1]
 
 | ID | Requirement | Acceptance Criteria |
 |----|-------------|-------------------|
-| F1 | | |
+| REQ-XX-001 | | |
 
 ### 4.2 [Functional Area 2]
 

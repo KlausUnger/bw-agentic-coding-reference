@@ -27,9 +27,9 @@ Each ADR is a markdown file named `YYYY-MM-DD-title-in-kebab-case.md`.
 
 ## Options Considered
 
-1. **Option A** - [Brief description]
-2. **Option B** - [Brief description]
-3. **Option C** - [Brief description]
+1. **Option A** — [Brief description]
+2. **Option B** — [Brief description]
+3. **Option C** — [Brief description]
 
 ## Decision
 
