@@ -60,7 +60,9 @@ From `docs/documentation.md`:
 6. For ADR checks, read all files in `docs/adr/`.
 7. Verify `cmd/config.example.yaml` reflects all config fields from `internal/config/config.go` and `docs/prd.md`.
 8. Execute every checklist item. Report each with file path and line number.
-9. Write findings to `.scratch/reviews/doc-review.md` using the template in `.claude/templates/review.md`.
+9. **Use the Write tool** to create `.scratch/reviews/doc-review.md` using the template in `.claude/templates/review.md`. Drafting the review in your reply is not enough — the file must exist on disk.
+10. **Verify** the file exists by using the Read tool on the same path. If Read fails, call Write again.
+11. Reply with exactly one line: `Wrote review to .scratch/reviews/doc-review.md (<status>)`. Do not include review content in your reply.
 
 ## Rules
 

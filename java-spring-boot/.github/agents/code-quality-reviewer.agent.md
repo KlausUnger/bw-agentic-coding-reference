@@ -37,4 +37,6 @@ You are a read-only analyst. Only permitted terminal commands: `./gradlew build`
 3. Read `.scratch/implementation-plan.md` for context.
 4. Identify changed/new files from the feature implementation.
 5. Check each file against the `code-quality-review` skill checklist.
-6. Write findings to `.scratch/reviews/code-quality.md` using the template in `.claude/templates/review.md`.
+6. **Use the write tool** to create `.scratch/reviews/code-quality.md` (include build/format/test output from steps 1–2). Use the template in `.claude/templates/review.md`. Drafting the review in your reply is not enough — the file must exist on disk.
+7. **Verify** the file exists by using the read tool on the same path. If read fails, write again.
+8. Reply with exactly one line: `Wrote review to .scratch/reviews/code-quality.md (<status>)`. Do not include review content in your reply.

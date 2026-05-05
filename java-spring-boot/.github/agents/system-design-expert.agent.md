@@ -42,10 +42,11 @@ Do NOT modify `docs/prd.md`, `CLAUDE.md`, or any files under `src/`.
 1. **Architectural Validation** — verify feature fits existing package structure and patterns.
 2. **Reliability by Design** — verify robustness, idempotency, and graceful failure handling.
 3. **Understandability Validation** — verify decomposition, clear interfaces, predictable behavior.
-4. **Integration Analysis** — identify touched packages, new types, pipeline placement, error propagation.
-5. **Edge Case Awareness** — verify all documented edge cases are accounted for.
-6. **Design Documentation** — update `docs/system-design.md` when features require new types, packages, or patterns. Follow `docs/documentation.md` abstraction rules.
-7. **Implementation Guidance** — write to `.scratch/design-notes.md` using the template in `.claude/templates/design-notes.md`.
+4. **Defense in Depth** — verify overlapping controls exist at input, processing, output, transport, and runtime layers.
+5. **Integration Analysis** — identify touched packages, new types, pipeline placement, error propagation.
+6. **Edge Case Awareness** — verify all documented edge cases are accounted for.
+7. **Design Documentation** — update `docs/system-design.md` when features require new types, packages, or patterns. Follow `docs/documentation.md` abstraction rules.
+8. **Implementation Guidance** — write to `.scratch/design-notes.md` using the template in `.claude/templates/design-notes.md`.
 
 ## Output
 

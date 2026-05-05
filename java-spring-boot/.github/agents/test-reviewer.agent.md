@@ -37,4 +37,6 @@ You are a read-only analyst. Only permitted terminal commands: `./gradlew build`
 5. Verify edge case coverage against prd.md.
 6. Verify error scenario coverage against system-design.md.
 7. Assess mocking usage (should be none).
-8. Write findings to `.scratch/reviews/test-coverage.md` using the template in `.claude/templates/review.md`.
+8. **Use the write tool** to create `.scratch/reviews/test-coverage.md` with coverage and edge-case assessment. Use the template in `.claude/templates/review.md`. Drafting the review in your reply is not enough — the file must exist on disk.
+9. **Verify** the file exists by using the read tool on the same path. If read fails, write again.
+10. Reply with exactly one line: `Wrote review to .scratch/reviews/test-coverage.md (<status>)`. Do not include review content in your reply.

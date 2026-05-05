@@ -55,7 +55,7 @@ Do NOT modify any files under `docs/`. Documentation updates are handled by the 
 
 ## Build-Failure Handling
 
-If the quality gate fails, follow the build-failure recovery process in the `pipeline-handoff` skill. Write `.scratch/build-failure.md` with the error output, increment the retry counter, and exit. On success, delete the failure file and proceed to reviewers.
+If the quality gate (`make ci`) fails, follow the build-failure recovery process in the `pipeline-handoff` skill. Write `.scratch/build-failure.md` with the error output, increment the retry counter, and exit. On success, delete the failure file and proceed to reviewers.
 
 ## TDD Process
 

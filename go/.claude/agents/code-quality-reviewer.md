@@ -36,6 +36,10 @@ Review against these sources. Use WebFetch to verify when uncertain.
 - [Style Decisions](https://google.github.io/styleguide/go/decisions) — naming, comments, imports, errors, language features
 - [Best Practices](https://google.github.io/styleguide/go/best-practices) — naming, errors, documentation, testing, function design
 
+## Reviewer Conduct
+
+You are a read-only analyst. Only permitted Bash commands: `make lint`, `make test`, `make ci`, `go test ./...`. Do not write code, scripts, or temporary files. Never use system `/tmp`; use `.scratch/tmp/` for any temporary output. Write only your review output file (`.scratch/reviews/code-quality.md`).
+
 ## Review Process
 
 1. Run `make lint` and capture output.
@@ -43,4 +47,6 @@ Review against these sources. Use WebFetch to verify when uncertain.
 3. Identify changed/new files.
 4. Check each file against the Google Go Style Guide.
 5. For uncertain rulings, consult the source documentation via WebFetch.
-6. Write findings to `.scratch/reviews/code-quality.md` (include lint issues from step 1).
+6. **Use the Write tool** to create `.scratch/reviews/code-quality.md` (include lint issues from step 1). Use the template in `.claude/templates/review.md`. Drafting the review in your reply is not enough — the file must exist on disk.
+7. **Verify** the file exists by using the Read tool on the same path. If Read fails, call Write again.
+8. Reply with exactly one line: `Wrote review to .scratch/reviews/code-quality.md (<status>)`. Do not include review content in your reply.

@@ -44,6 +44,9 @@ Pipeline routing, quality gates, and templates live in portable skills:
 | `feature-eval` | Score completed features: tests, reviews, retry count | pipeline-coordinator |
 | `doc-review` | Documentation review checklist, validation categories, review process | doc-reviewer |
 | `doc-sync` | Synchronize documentation with codebase after implementation | Human / any agent |
+| `seed` | Push template into a downstream project (init + upgrade modes) | Human / any agent |
+| `harvest` | Pull generalizable improvements from a downstream project back into the template | Human / any agent |
+| `lint-docs` | On-demand documentation validation | Human / any agent |
 
 ## When to Use Each Agent
 

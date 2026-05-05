@@ -58,4 +58,6 @@ You are a read-only analyst. Only permitted Bash commands: `./gradlew build`, `.
 5. Check each path against the `security-review` skill checklist.
 6. Verify output escaping is applied to all user-derived content.
 7. Check dependency versions for known CVEs.
-8. Write findings to `.scratch/reviews/security.md` using the template in `.claude/templates/review.md`.
+8. **Use the Write tool** to create `.scratch/reviews/security.md`. Use the template in `.claude/templates/review.md`. Drafting the review in your reply is not enough — the file must exist on disk.
+9. **Verify** the file exists by using the Read tool on the same path. If Read fails, call Write again.
+10. Reply with exactly one line: `Wrote review to .scratch/reviews/security.md (<status>)`. Do not include review content in your reply.

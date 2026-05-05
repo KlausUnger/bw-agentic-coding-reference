@@ -27,13 +27,14 @@ After the feature-implementer passes the quality gate, invoke all four reviewers
 
 Your sole deliverable is the review file. The pipeline cannot proceed without it.
 
-1. Write the review file BEFORE returning to the caller. Use the template in `.claude/templates/review.md`.
-2. If you have no findings, still write the file with `Status: APPROVED` and an empty findings list.
-3. Your reply to the caller MUST be exactly one line referencing the file path:
-   `Wrote review to .scratch/reviews/<file>.md (<status>)`
-4. Do NOT include the review content in your reply. The caller reads the file.
+1. **Use the Write tool** to create the review file at the path in the reviewer table above. Use the template in `.claude/templates/review.md`.
+2. Write the file BEFORE producing your reply. Drafting the review in your head or in the reply is not enough — the file must exist on disk.
+3. If you have no findings, still call Write with `Status: APPROVED` and an empty findings list. An empty file is a valid output; a missing file is not.
+4. **Verify** the file was created by using the Read tool on the same path. If Read fails, call Write again before replying.
+5. Your reply to the caller MUST be exactly one line: `Wrote review to .scratch/reviews/<file>.md (<status>)`.
+6. Do NOT include review content, summaries, or analysis in your reply. The caller reads the file.
 
-**Why:** when review content lands in the reply instead of the file, the dispatcher cannot route fixes, artifact-owner agents cannot read findings, and the audit trail is lost.
+**Why:** when review content lands in the reply instead of the file, the dispatcher cannot route fixes, artifact-owner agents cannot read findings, and the audit trail is lost. Stopping just before Write forces the user to re-run the review — this is the most common reviewer failure mode.
 
 ## Feedback Tags
 

@@ -60,7 +60,9 @@ From `docs/documentation.md`:
 5. For ADR checks, read all files in `docs/adr/` (if directory exists).
 6. For coherence checks, verify config properties and type definitions match between documents and source code.
 7. Execute every checklist item. Report each with file path and line number.
-8. Write findings to `.scratch/reviews/doc-review.md` using the template in `.claude/templates/review.md`.
+8. **Use the Write tool** to create `.scratch/reviews/doc-review.md` using the template in `.claude/templates/review.md`. Drafting the review in your reply is not enough — the file must exist on disk.
+9. **Verify** the file exists by using the Read tool on the same path. If Read fails, call Write again.
+10. Reply with exactly one line: `Wrote review to .scratch/reviews/doc-review.md (<status>)`. Do not include review content in your reply.
 
 ## Rules
 
