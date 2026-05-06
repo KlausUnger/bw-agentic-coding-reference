@@ -51,6 +51,8 @@ Pipeline logic lives in skills (`.claude/skills/`), not in agent definitions. Al
 | `seed` | Push template into a downstream project (init + upgrade modes) |
 | `harvest` | Pull generalizable improvements from a downstream project back into the template |
 | `lint-docs` | On-demand documentation validation |
+| `ship` | Commit staged changes and push to remote in one step |
+| `next` | Reset scratch and recommend the next PRD requirement to tackle |
 
 ### Reference
 

@@ -55,12 +55,20 @@ Read all files in `.claude/agents/` and check:
 
 ### 5. Cross-Tool Parity
 
-Compare `.claude/agents/` against `.opencode/agents/`:
+Compare each agent across all three tool directories: `.claude/agents/`, `.opencode/agents/`, and `.github/agents/`.
 
 - **Same persona text** (first paragraph after frontmatter).
 - **Same skill references** (identical skill names).
 - **Same process steps** (same numbered list).
-- **Correct model mapping** (sonnet = claude-sonnet-4, opus = claude-opus-4).
+- **Correct model mapping.** Each tier maps across tools as follows; flag only deviations from this table:
+
+  | Tier | Claude Code | OpenCode | GitHub Copilot |
+  |------|-------------|----------|----------------|
+  | Sonnet | `sonnet` | `openrouter/anthropic/claude-sonnet-4` | `Claude Sonnet 4.6 (copilot)` |
+  | Opus | `opus` | `openrouter/anthropic/claude-opus-4` | `Claude Opus 4.6 (copilot)` |
+
+  The minor-version asymmetry (OpenRouter alias resolves dynamically, Copilot pins explicitly) is intentional. Do not flag it.
+- **Tool-name capitalization is tool-local.** Each tool's `write` / `Write` tool name is correct in its own files. Do not flag capitalization differences across tools.
 
 ### 6. Cross-Document Consistency
 

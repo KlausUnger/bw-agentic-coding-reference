@@ -141,6 +141,8 @@ Both projects must have the same set of portable skills. Compare `.claude/skills
 | `seed` | Push template into a downstream project (init + upgrade modes) |
 | `harvest` | Pull generalizable improvements from a downstream project back into the template |
 | `lint-docs` | On-demand documentation validation |
+| `next` | Reset scratch and recommend the next PRD requirement to tackle |
+| `ship` | Commit staged changes and push to remote in one step |
 
 Report any skill present in one project but missing from the other.
 

@@ -104,7 +104,7 @@ When the constructor signature changes, fix one factory method instead of every 
 
 ### Anonymous Factories
 
-When few fields drive the test outcome, create factories that auto-generate irrelevant values and accept only the fields that matter:
+When most fields are irrelevant, create factories that auto-generate irrelevant values and accept only the fields that matter:
 
 ```text
 createATeacher("Math")    -- only department matters
@@ -142,7 +142,7 @@ Prefer assertion libraries that produce chained, readable, self-documenting asse
 
 | Principle | Rule |
 |-----------|------|
-| Use the direct assertion | Pick the assertion that says exactly what you mean |
+| Use the most direct assertion available | Pick the assertion that says exactly what you mean |
 | One assertion per concern | Multiple assertions on the same result are fine; testing unrelated concerns is not |
 | No branching in assertions | No `if/else`, `switch`, or loops. Use collection-aware assertions instead |
 | Whole-object comparison | Compare complete expected objects rather than picking apart fields |

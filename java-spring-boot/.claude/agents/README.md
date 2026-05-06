@@ -47,6 +47,8 @@ Pipeline routing, quality gates, and templates live in portable skills:
 | `seed` | Push template into a downstream project (init + upgrade modes) | Human / any agent |
 | `harvest` | Pull generalizable improvements from a downstream project back into the template | Human / any agent |
 | `lint-docs` | On-demand documentation validation | Human / any agent |
+| `ship` | Commit staged changes and push to remote in one step | Human / any agent |
+| `next` | Reset scratch, recommend next PRD requirement to implement | Human / any agent |
 
 ## When to Use Each Agent
 
