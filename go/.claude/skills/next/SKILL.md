@@ -25,7 +25,7 @@ A skill cannot invoke `/clear` — slash commands run in the harness, not Claude
 1. Reset scratch state:
 
    ```bash
-   rm -rf .scratch && mkdir -p .scratch/reviews .scratch/tmp
+   rm -rf .scratch && mkdir -p .scratch/tmp
    ```
 
 2. Extract requirement identifiers from the PRD:

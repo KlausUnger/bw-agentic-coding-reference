@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SDE→implementer handoff record (design-block)",
+  "description": "Single JSONL record appended to .scratch/handoff.jsonl by system-design-expert after design validation, or after a build-failure escalation. Carries the architectural guidance that feature-implementer needs to write tests and code without re-deriving package placement, integration points, or design risks. Conservative required-field set; grow on observed retry deltas.",
+  "type": "object",
+  "required": [
+    "type",
+    "req_id",
+    "ts",
+    "author",
+    "verdict",
+    "architectural_fit",
+    "primary_paths"
+  ],
+  "properties": {
+    "type": {
+      "description": "Discriminator. Always \"design-block\" for this record type.",
+      "const": "design-block"
+    },
+    "req_id": {
+      "description": "Requirement ID linking this design back to the prd-entry.",
+      "type": "string",
+      "pattern": "^REQ-[A-Z]+-[0-9]{3}$"
+    },
+    "ts": {
+      "description": "ISO 8601 timestamp when the record was appended.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "author": {
+      "description": "Pinned to SDE for this record type.",
+      "const": "system-design-expert"
+    },
+    "verdict": {
+      "description": "Routing signal for the coordinator. approved → implementer; needs_changes/blocked → bounce to PRE/SDE; revised → implementer (resets retry counter after a build-failure escalation); escalated → human decides.",
+      "enum": [
+        "approved",
+        "needs_changes",
+        "blocked",
+        "revised",
+        "escalated"
+      ]
+    },
+    "architectural_fit": {
+      "description": "How the feature integrates with the existing design. Plain prose; references docs/system-design.md sections where relevant.",
+      "type": "string",
+      "minLength": 1
+    },
+    "primary_paths": {
+      "description": "Paths the feature primarily lives in. At least one. Implementer reads this as the starting target set.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "supporting_paths": {
+      "description": "Other paths touched (helpers, fixtures, related tests). Optional.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "integration_points": {
+      "description": "Component-to-component connections introduced or changed. One entry per integration. Optional but recommended when the feature crosses module boundaries.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "patterns": {
+      "description": "Existing code patterns to follow. Each entry references a file:line and explains the pattern.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "ref",
+          "description"
+        ],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "file path, optionally :line"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "risks": {
+      "description": "Identified design risks and their mitigations. Optional.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "risk",
+          "mitigation"
+        ],
+        "properties": {
+          "risk": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mitigation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "escalations": {
+      "description": "Items requiring human decision. Required when verdict is \"escalated\".",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "supersedes_record_at": {
+      "description": "When verdict is \"revised\", the line number (1-indexed) of the prior design-block record this revision supersedes. Append-only is preserved; this is a back-reference, not an edit.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "notes": {
+      "description": "Free-form context that doesn't fit other fields. Avoid as a dumping ground.",
+      "type": "string"
+    }
+  }
+}

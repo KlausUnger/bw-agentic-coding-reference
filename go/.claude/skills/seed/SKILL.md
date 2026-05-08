@@ -58,7 +58,12 @@ CLAUDE.md                  (root rules file; placeholders filled in step 3)
 
 .github/
 └── agents/*.agent.md     (Copilot agents)
+
+schemas/
+└── scratch/*.json        (JSON Schemas for .scratch/handoff.jsonl record types)
 ```
+
+`schemas/scratch/` carries the per-record-type JSON Schemas that the pipeline-coordinator uses to gate agent transitions on `.scratch/handoff.jsonl`. Copy verbatim — these are language-specific (the regex patterns assume this template's conventions, e.g. Go test naming) and should not be modified during seed.
 
 ### 3. Fill Placeholders
 
@@ -138,12 +143,18 @@ Common missing-scaffolding cases (pre-fix targets):
 | Copilot agents | `.github/agents/*.agent.md` | `<project>/.github/agents/*.agent.md` |
 | Templates | `.claude/templates/*.md` | `<project>/.claude/templates/*.md` |
 | Settings | `.claude/settings.local.json` | `<project>/.claude/settings.local.json` |
+| Scratch schemas | `schemas/scratch/*.json` | `<project>/schemas/scratch/*.json` |
 | Principles docs | `docs/{ddd,tdd,testing}-principles.md` | `<project>/docs/{ddd,tdd,testing}-principles.md` |
-| Doc scaffolding | `docs/{prd,system-design,documentation}.md`, `docs/adr/` | `<project>/docs/{prd,system-design,documentation}.md`, `<project>/docs/adr/` |
+| Doc scaffolding | `docs/{prd,system-design,documentation}.md`, `docs/adr/README.md` | `<project>/docs/{prd,system-design,documentation}.md`, `<project>/docs/adr/README.md` |
+| Generic ADRs | `docs/adr/YYYY-MM-DD-*.md` (template-authored decisions only) | `<project>/docs/adr/YYYY-MM-DD-*.md` |
 
 Build files (`go.mod`, `go.sum`, `Makefile`) are not diffed — the target's build config is authoritative and seed never pushes changes to them.
 
 Doc scaffolding diff is **structural only**: push template changes to section headers, `<!-- AGENT: ... -->` comments, and table stubs; never overwrite filled-in requirements, architecture, or ADRs. Target's domain content wins every conflict.
+
+Generic ADR diff: only push ADRs that originated in the template (decisions about workflow architecture, agent pipelines, schemas, etc. — not project-specific decisions). Match by filename. Target ADRs that aren't in the template are **always preserved** — those are the target project's own architectural decisions and seed must never overwrite them.
+
+Scratch schemas (`schemas/scratch/*.json`) follow the same diff-and-merge logic as skills: push template changes verbatim. The target may have added downstream schemas (e.g. project-specific record types) — those are preserved.
 
 ### 2. Classify Differences
 

@@ -72,19 +72,21 @@ For each agent, compare all three tool versions (`.claude/`, `.opencode/`, `.git
 - [ ] All `.claude/templates/X.md` references point to existing files.
 - [ ] All `.scratch/` file references are consistent across agents, skills, and README.
 
-### 5. Review Output Files
+### 5. Review Output Records
 
-Verify these filenames match across all locations:
-- Reviewer agent files (all three tools)
+Verify the `author` enum values match across all locations:
+- Reviewer agent files (all three tools — each names its own `author` value)
 - `review-checklist` skill reviewer table
 - `.claude/agents/README.md` agent table
-- `.claude/templates/review.md` (output format)
+- `schemas/scratch/review-feedback.schema.json` `author` enum
 
-Expected filenames:
-- `code-quality-reviewer` writes `.scratch/reviews/code-quality.md`
-- `test-reviewer` writes `.scratch/reviews/test-coverage.md`
-- `security-reviewer` writes `.scratch/reviews/security.md`
-- `doc-reviewer` writes `.scratch/reviews/doc-review.md`
+Expected `author` values for `review-feedback` records:
+- `code-quality-reviewer`
+- `test-reviewer`
+- `security-reviewer`
+- `doc-reviewer`
+
+Each reviewer appends one `review-feedback` record per dispatch to `.scratch/handoff.jsonl`. There is no per-reviewer markdown file.
 
 ### 6. No Duplication
 
@@ -95,20 +97,24 @@ Expected filenames:
 
 ### 7. State File Consistency
 
-Verify state file names match across:
+Verify state file references match across:
 - `pipeline-handoff` skill state files table
 - `.claude/agents/README.md` scratch directory structure
-- `.claude/templates/` directory
+- `.claude/templates/` directory (markdown helpers only)
+- `schemas/scratch/*.json` (record schemas)
 
 Expected state files:
-- `.scratch/current-feature.md` (product-requirements-expert)
-- `.scratch/design-notes.md` (system-design-expert)
-- `.scratch/implementation-plan.md` (feature-implementer)
-- `.scratch/build-failure.md` (feature-implementer, deleted on success)
-- `.scratch/reviews/*.md` (reviewer agents)
-- `.scratch/review-summary.md` (feature-implementer)
+- `.scratch/handoff.jsonl` (append-only; record types: `prd-entry`, `design-block`, `build-failure`, `build-pass`, `review-feedback`)
+- `.scratch/implementation-plan.md` (feature-implementer self-tracking)
 - `.scratch/escalations.md` (feature-implementer)
 - `.scratch/eval-*.md` (coordinator via feature-eval skill)
+
+Expected schema files (one per record type):
+- `schemas/scratch/prd-entry.schema.json`
+- `schemas/scratch/design-block.schema.json`
+- `schemas/scratch/review-feedback.schema.json`
+- `schemas/scratch/build-failure.schema.json`
+- `schemas/scratch/build-pass.schema.json`
 
 ### 8. Quality Gate Consistency
 

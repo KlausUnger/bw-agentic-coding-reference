@@ -62,7 +62,12 @@ CLAUDE.md                  (root rules file; placeholders filled in step 3)
 
 .github/
 └── agents/*.agent.md     (Copilot agents)
+
+schemas/
+└── scratch/*.json        (JSON Schemas for .scratch/handoff.jsonl record types)
 ```
+
+`schemas/scratch/` carries the per-record-type JSON Schemas that the pipeline-coordinator uses to gate agent transitions on `.scratch/handoff.jsonl`. Copy verbatim — these are language-specific (the regex patterns assume this template's conventions, e.g. JUnit `@Test`-tagged method names) and should not be modified during seed.
 
 **Build files (variant-dependent):**
 - Gradle (default): copy `build.gradle`, `settings.gradle`, `gradlew`, `gradlew.bat`, `gradle/` directory.
@@ -288,9 +293,13 @@ Common missing-scaffolding cases (pre-fix targets):
 | Copilot agents | `.github/agents/*.agent.md` | `<project>/.github/agents/*.agent.md` |
 | Templates | `.claude/templates/*.md` | `<project>/.claude/templates/*.md` |
 | Settings | `.claude/settings.local.json` | `<project>/.claude/settings.local.json` |
+| Scratch schemas | `schemas/scratch/*.json` | `<project>/schemas/scratch/*.json` |
 | Principles docs | `docs/{ddd,tdd,testing}-principles.md` | `<project>/docs/{ddd,tdd,testing}-principles.md` |
-| Doc scaffolding | `docs/{prd,system-design,documentation}.md`, `docs/adr/` | `<project>/docs/{prd,system-design,documentation}.md`, `<project>/docs/adr/` — structural diff only; target's filled-in requirements, architecture, and ADRs are authoritative |
+| Doc scaffolding | `docs/{prd,system-design,documentation}.md`, `docs/adr/README.md` | `<project>/docs/{prd,system-design,documentation}.md`, `<project>/docs/adr/README.md` — structural diff only; target's filled-in requirements, architecture are authoritative |
+| Generic ADRs | `docs/adr/YYYY-MM-DD-*.md` (template-authored decisions only) | `<project>/docs/adr/YYYY-MM-DD-*.md` — push template ADRs by filename match; target ADRs not in template are always preserved |
 | Build files | `build.gradle`, `settings.gradle`, `gradlew*`, `gradle/` (Gradle) — or `pom.xml`, `mvnw*`, `.mvn/` (Maven) | Same paths at `<project>/` root. Diff is informational only — target's build config is authoritative, never auto-pushed. |
+
+Scratch schemas (`schemas/scratch/*.json`) follow the same diff-and-merge logic as skills: push template changes verbatim. The target may have added downstream schemas (e.g. project-specific record types) — those are preserved.
 
 ### 2. Classify Differences
 

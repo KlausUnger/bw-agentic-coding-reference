@@ -28,66 +28,102 @@ metadata:
 
 ## Handoff Conditions
 
+All transitions are gated on the latest record per `(req_id, type)` in `.scratch/handoff.jsonl`. The Validation Gates section below defines each gate's structural checks.
+
 | Current Agent | Trigger | Next Agent |
 |---|---|---|
-| product-requirements-expert | `.scratch/current-feature.md` contains `Status: Ready for Implementation` | system-design-expert |
-| system-design-expert | `.scratch/design-notes.md` contains `Recommendation: APPROVED` or `Status: REVISED` | feature-implementer |
-| feature-implementer | Quality gate passes (build, test, fmt, lint) | All reviewers (parallel) |
-| feature-implementer | Quality gate fails, `Retry` < 3 | feature-implementer (retry with error context) |
-| feature-implementer | Quality gate fails, `Retry` = 3 | system-design-expert (escalation) |
-| Reviewers | All four contain `Status: APPROVED` | Feature complete |
+| product-requirements-expert | latest `prd-entry` record passes the Validation Gate | system-design-expert |
+| system-design-expert | latest `design-block` record has `verdict: "approved"` or `"revised"` and passes the Validation Gate | feature-implementer |
+| feature-implementer | latest `build-pass` record exists and post-dates any `build-failure` for the same `req_id` | All reviewers (parallel) |
+| feature-implementer | latest `build-failure` record has `retry < 3` | feature-implementer (retry with error context) |
+| feature-implementer | latest `build-failure` record has `retry == 3` | system-design-expert (escalation) |
+| All four reviewers | each reviewer's latest `review-feedback` record has `verdict: "approved"` | Feature complete |
+| Any reviewer | latest `review-feedback` record has `verdict: "changes_requested"` or `"blocked"` with non-empty findings | feature-implementer (process findings) |
+
+## Validation Gates
+
+Each agent transition validates the inbound record(s) against a schema before dispatching the next specialist. Malformed or missing records bounce back to the upstream agent without consuming a Sonnet/Opus dispatch — see ADR [`2026-05-08-append-only-jsonl-handoffs`](../../../docs/adr/2026-05-08-append-only-jsonl-handoffs.md) for rationale.
+
+### Common Procedure
+
+1. Read `.scratch/handoff.jsonl`. If the file is missing or empty when a record is required, the gate fails — route back to the upstream agent.
+2. Filter records by `req_id` and `type`. The **latest** record for each `(req_id, type)` is the active state.
+3. Check required fields, types, and pattern constraints per the schema.
+4. If every check passes: dispatch the next agent. If any check fails: route back upstream with a `Blocked` recommendation naming the specific failed check.
+
+### Gate 1: PRE → SDE (`prd-entry`)
+
+Schema: [`schemas/scratch/prd-entry.schema.json`](../../../schemas/scratch/prd-entry.schema.json). Required checks:
+
+- `type == "prd-entry"`, `author == "product-requirements-expert"`.
+- `req_id` matches `^REQ-[A-Z]+-[0-9]{3}$`. `ts` is a non-empty ISO 8601 string.
+- `title`, `summary` are non-empty strings.
+- `acceptance_criteria`, `file_targets`, `test_names` are non-empty arrays of non-empty strings.
+- Each `test_names` entry matches `^[a-z][A-Za-z0-9_]*$` (Java method naming).
+
+### Gate 2: SDE → implementer (`design-block`)
+
+Schema: [`schemas/scratch/design-block.schema.json`](../../../schemas/scratch/design-block.schema.json). Required checks:
+
+- `type == "design-block"`, `author == "system-design-expert"`, valid `req_id` and `ts`.
+- `verdict` is one of: `approved`, `needs_changes`, `blocked`, `revised`, `escalated`.
+- `architectural_fit` is non-empty; `primary_paths` is a non-empty array of non-empty strings.
+- When `verdict == "escalated"`: `escalations` array is present and non-empty.
+- When `verdict == "revised"`: `supersedes_record_at` is present and points to a prior `design-block` record line in the file.
+
+Routing:
+
+- `approved` or `revised` → dispatch feature-implementer. (`revised` resets the build-failure retry counter for that `req_id`.)
+- `needs_changes` or `blocked` → bounce back; PRE may need to refine, or SDE may need to re-run.
+- `escalated` → stop the pipeline; human decides.
+
+### Gate 3: implementer → reviewers (`build-pass`)
+
+Schema: [`schemas/scratch/build-pass.schema.json`](../../../schemas/scratch/build-pass.schema.json). Required checks:
+
+- The latest `build-*` record for `req_id` is `type == "build-pass"`.
+- `author == "feature-implementer"`, valid `req_id` and `ts`.
+
+If the latest is a `build-failure`, apply Build-Failure Recovery instead.
+
+### Gate 4: reviewers → implementer or done (`review-feedback`)
+
+Schema: [`schemas/scratch/review-feedback.schema.json`](../../../schemas/scratch/review-feedback.schema.json). For each of the four reviewer `author` values, check the latest record for the active `req_id` since the latest `build-pass`:
+
+- `verdict` is one of: `approved`, `changes_requested`, `blocked`.
+- `findings` is an array; each finding has `tag`, `location`, `description`. `tag: "clarify"` requires `clarify_target`.
+- All four reviewers' latest verdict is `"approved"` → feature complete (load `feature-eval` skill).
+- Any reviewer's latest verdict is `"changes_requested"` or `"blocked"` → dispatch feature-implementer with the structured findings; after fixes, append fresh `build-failure`/`build-pass` and re-invoke reviewers.
 
 ## Blocking
 
-If any agent outputs `NEEDS_CHANGES`, `BLOCKED`, or `[ESCALATE]`, stop the pipeline and resolve before continuing.
+If any gate fails, or any record carries `verdict: "blocked"` or `"escalated"`, stop the pipeline and resolve before continuing.
 
 ## Build-Failure Recovery
 
-When the feature-implementer runs the quality gate and it fails (build error, test failure, lint failure), the implementer writes `.scratch/build-failure.md` with the error output, then exits.
-
-### Failure file format
-
-```markdown
----
-Pipeline: [feature-name]
-Stage: implementation (retry)
-Author: feature-implementer
-Timestamp: [ISO 8601]
-Status: BUILD_FAILED
-Retry: [1-3]
----
-
-## Failed Check
-[build | test | lint | fmt | vet | deps-check]
-
-## Error Output
-[full error output from the failing command]
-
-## What Was Attempted
-[brief description of the change that caused the failure]
-```
+When the feature-implementer runs the quality gate (`./gradlew build && ./gradlew test && ./gradlew checkJavaFormat`) and it fails, the implementer appends a `build-failure` record to `.scratch/handoff.jsonl` with the error output and retry count, then exits. Schema: [`schemas/scratch/build-failure.schema.json`](../../../schemas/scratch/build-failure.schema.json).
 
 ### Coordinator retry logic
 
-1. Read `.scratch/build-failure.md`. Extract the `Retry` count.
-2. If `Retry` < 3, route back to feature-implementer with this prompt context:
-   - `.scratch/build-failure.md` (the error output)
-   - `.scratch/design-notes.md` (the original design)
-   - `.scratch/implementation-plan.md` (what was planned)
-   - Instruction: "Fix the build failure described in `.scratch/build-failure.md`. This is retry N of 3."
-3. If `Retry` = 3, escalate to system-design-expert with this prompt context:
-   - `.scratch/build-failure.md` (all three failure attempts)
-   - `.scratch/design-notes.md`
+1. Read `.scratch/handoff.jsonl`. Take the latest `build-failure` record for the active `req_id`.
+2. If `retry < 3`, route back to feature-implementer with this prompt context:
+   - The latest `build-failure` record (the error output).
+   - The latest `design-block` record (the original design).
+   - `.scratch/implementation-plan.md` (what was planned).
+   - Instruction: "Fix the build failure described in the latest `build-failure` record. This is retry N of 3."
+3. If `retry == 3`, escalate to system-design-expert with this prompt context:
+   - All `build-failure` records for the active `req_id` since the latest `design-block` (the failure trail).
+   - The latest `design-block` record.
    - Instruction: "The implementer failed 3 times. Review whether the design needs revision."
-   - The design expert writes updated `.scratch/design-notes.md` with `Status: REVISED` or escalates to human with `[ESCALATE]`.
-4. After a design revision (`Status: REVISED`), reset the retry counter. The coordinator routes back to the feature-implementer with `Retry: 0`.
+   - The design expert appends a new `design-block` record with `verdict: "revised"` (and `supersedes_record_at`) or `verdict: "escalated"`.
+4. After a design revision (`verdict: "revised"`), the retry counter resets — the next `build-failure` record starts at `retry: 1`.
 
 ### Retry rules
 
-- The implementer increments `Retry` in `.scratch/build-failure.md` on each attempt.
-- On success, the implementer deletes `.scratch/build-failure.md` and proceeds to reviewers.
-- The coordinator never modifies `Retry` — it only reads it for routing decisions.
-- Maximum 3 retries per design cycle. A design revision resets the counter.
+- The implementer increments `retry` in each new `build-failure` record (1, 2, 3). Compute the next value by counting `build-failure` records for the active `req_id` appended *after* the latest `design-block` line, then setting `retry = count + 1`. The first failure after a fresh `design-block` (whether `verdict: "approved"` or `"revised"`) is `retry: 1`. Append-only — never edit a prior record.
+- On success, the implementer appends a `build-pass` record. Prior `build-failure` records remain in the file as the diagnostic retry trail.
+- The coordinator never modifies records — it only reads them for routing decisions.
+- Maximum 3 retries per design cycle. A new `design-block` with `verdict: "revised"` starts a fresh cycle.
 
 ## Mid-Implementation Feedback
 
@@ -101,13 +137,12 @@ See the `review-checklist` skill for feedback tag definitions and the review pro
 
 | File | Created By | Consumed By |
 |---|---|---|
-| `.scratch/current-feature.md` | product-requirements-expert | system-design-expert, feature-implementer |
-| `.scratch/design-notes.md` | system-design-expert | feature-implementer |
+| `.scratch/handoff.jsonl` (`prd-entry` records) | product-requirements-expert | system-design-expert, feature-implementer |
+| `.scratch/handoff.jsonl` (`design-block` records) | system-design-expert | feature-implementer, coordinator |
+| `.scratch/handoff.jsonl` (`build-failure` / `build-pass` records) | feature-implementer | coordinator, system-design-expert (escalation) |
+| `.scratch/handoff.jsonl` (`review-feedback` records) | reviewer agents | feature-implementer, coordinator |
 | `.scratch/implementation-plan.md` | feature-implementer | feature-implementer (self-tracking) |
-| `.scratch/reviews/*.md` | reviewer agents | feature-implementer |
-| `.scratch/review-summary.md` | feature-implementer | Human (final check) |
 | `.scratch/escalations.md` | feature-implementer | Human |
-| `.scratch/build-failure.md` | feature-implementer | coordinator, feature-implementer (retry), system-design-expert (escalation) |
 | `.scratch/eval-*.md` | coordinator (via feature-eval skill) | Human |
 
 ## Human Checkpoints
@@ -149,9 +184,9 @@ If blocked:
 1. Never skip pipeline stages for new features.
 2. Shortcuts are allowed only per the agent selection table above.
 3. If `.scratch/` contains stale state from a previous feature, recommend clearing it first.
-4. Report all `[ESCALATE]` items found in state files.
-5. If `.scratch/build-failure.md` exists, apply the retry logic in the "Build-Failure Recovery" section.
-6. After all reviewers approve, load the `feature-eval` skill and write the evaluation scorecard.
+4. Report all `verdict: "escalated"` records and `tag: "escalate"` findings.
+5. If the latest `build-*` record for the active `req_id` is a `build-failure`, apply the retry logic in the "Build-Failure Recovery" section.
+6. After all four reviewers' latest `review-feedback` verdicts are `"approved"`, load the `feature-eval` skill and write the evaluation scorecard.
 
 ## Pipeline Flow
 
@@ -159,30 +194,30 @@ If blocked:
 User Request
     |
     v
-Pipeline Coordinator (classifies request, checks .scratch/ state)
+Pipeline Coordinator (classifies request, validates latest handoff.jsonl records)
     |
     +--- New feature ------> product-requirements-expert
-    |                              |
-    |                              v (Status: Ready for Implementation)
+    |                              | (appends prd-entry record)
+    |                              v
     |                        system-design-expert
-    |                              |
-    |                              v (Recommendation: APPROVED or Status: REVISED)
+    |                              | (appends design-block, verdict: approved | revised)
+    |                              v
     |                        feature-implementer
-    |                              |
+    |                              | (appends build-failure or build-pass)
     |                     +--------+--------+
     |                     |                 |
-    |                     v (passes)        v (fails, Retry < 3)
+    |                     v (build-pass)    v (build-failure, retry < 3)
     |               All reviewers      feature-implementer
     |                  (parallel)       (retry with error context)
     |                     |                 |
-    |                     |                 v (fails, Retry = 3)
+    |                     |                 v (build-failure, retry == 3)
     |                     |           system-design-expert
-    |                     |           (revise or [ESCALATE])
+    |                     |           (verdict: revised or escalated)
     |                     |                 |
-    |                     |                 v (Status: REVISED, retry reset)
+    |                     |                 v (verdict: revised, retry reset)
     |                     |           feature-implementer
     |                     |
-    |                     v (all four: Status: APPROVED)
+    |                     v (all four review-feedback verdicts: approved)
     |               Feature eval → .scratch/eval-<name>.md
     |                     |
     |                     v

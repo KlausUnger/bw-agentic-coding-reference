@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Quality-gate failure record (build-failure)",
+  "description": "Appended by feature-implementer when the quality gate (make ci) fails. The coordinator reads the latest build-failure record per req_id to decide between retry (retry < 3) and SDE escalation (retry == 3). Append-only; failures are not deleted on success — instead, a build-pass record is appended so the retry trail survives in the file.",
+  "type": "object",
+  "required": [
+    "type",
+    "req_id",
+    "ts",
+    "author",
+    "retry",
+    "failed_check",
+    "error_output",
+    "attempted"
+  ],
+  "properties": {
+    "type": {
+      "const": "build-failure"
+    },
+    "req_id": {
+      "type": "string",
+      "pattern": "^REQ-[A-Z]+-[0-9]{3}$"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "author": {
+      "const": "feature-implementer"
+    },
+    "retry": {
+      "description": "Retry counter for this design cycle. 1 on the first failure, increments on each subsequent failure. Resets to 1 after a design-block record with verdict=revised.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "failed_check": {
+      "description": "Which step of the quality gate failed.",
+      "enum": [
+        "build",
+        "test",
+        "lint",
+        "fmt",
+        "vet",
+        "deps-check"
+      ]
+    },
+    "error_output": {
+      "description": "Full error output from the failing command. Multi-line strings are fine; JSONL preserves newlines as \\n.",
+      "type": "string",
+      "minLength": 1
+    },
+    "attempted": {
+      "description": "Brief description of the change the implementer made before the failure surfaced.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

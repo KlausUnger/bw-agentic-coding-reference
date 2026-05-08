@@ -15,13 +15,13 @@ Agent definitions for reference. Each agent has a specific role in the feature d
 | Agent | Role | Model | Outputs |
 |-------|------|-------|---------|
 | **pipeline-coordinator** | Classify requests, check state, route to agents | Sonnet | Routing recommendations |
-| **product-requirements-expert** | Define and clarify feature requirements | Opus | `docs/prd.md`, `.scratch/current-feature.md` |
-| **system-design-expert** | Validate architectural fit | Opus | `docs/system-design.md`, `.scratch/design-notes.md` |
-| **feature-implementer** | TDD/DDD implementation | Opus | Code, tests, `cmd/config.example.yaml`, `.scratch/implementation-plan.md` |
-| **code-quality-reviewer** | Readability, Go style guide | Sonnet | `.scratch/reviews/code-quality.md` |
-| **test-reviewer** | Test pyramid, coverage | Sonnet | `.scratch/reviews/test-coverage.md` |
-| **security-reviewer** | OWASP, vulnerabilities | Sonnet | `.scratch/reviews/security.md` |
-| **doc-reviewer** | Doc coherence, structure, writing | Sonnet | `.scratch/reviews/doc-review.md` |
+| **product-requirements-expert** | Define and clarify feature requirements | Opus | `docs/prd.md`, `.scratch/handoff.jsonl` (`prd-entry` record) |
+| **system-design-expert** | Validate architectural fit | Opus | `docs/system-design.md`, `.scratch/handoff.jsonl` (`design-block` record) |
+| **feature-implementer** | TDD/DDD implementation | Opus | Code, tests, `cmd/config.example.yaml`, `.scratch/handoff.jsonl` (`build-failure` / `build-pass` records), `.scratch/implementation-plan.md` |
+| **code-quality-reviewer** | Readability, Go style guide | Sonnet | `.scratch/handoff.jsonl` (`review-feedback` record, `author: "code-quality-reviewer"`) |
+| **test-reviewer** | Test pyramid, coverage | Sonnet | `.scratch/handoff.jsonl` (`review-feedback` record, `author: "test-reviewer"`) |
+| **security-reviewer** | OWASP, vulnerabilities | Sonnet | `.scratch/handoff.jsonl` (`review-feedback` record, `author: "security-reviewer"`) |
+| **doc-reviewer** | Doc coherence, structure, writing | Sonnet | `.scratch/handoff.jsonl` (`review-feedback` record, `author: "doc-reviewer"`) |
 
 ## Skills
 
@@ -73,7 +73,7 @@ This workflow targets three tools: Claude Code (primary), OpenCode (experimental
 2. **Skills in `.claude/skills/` only.** This is the only location all three tools discover. Do not create `.opencode/skills/` or `.github/skills/`.
 3. **Agent definitions are tool-specific.** Claude Code agents live in `.claude/agents/`. OpenCode equivalents go in `.opencode/agents/`. Copilot equivalents go in `.github/agents/`. Do not try to make agent files portable.
 4. **Project docs are tool-agnostic.** `docs/` is read by all tools with no special discovery. Keep requirements, architecture, and ADRs here.
-5. **Pipeline state is tool-agnostic.** `.scratch/` files use plain markdown with status strings. Any tool can read and write them.
+5. **Pipeline state is tool-agnostic.** `.scratch/handoff.jsonl` is append-only JSONL (one JSON record per line) and other `.scratch/` markdown helpers use plain text. Any tool can read and write them.
 
 ### What Each Tool Reads
 
@@ -107,7 +107,7 @@ The pipeline follows a maturity progression. Each level builds on the previous.
 |-------|------|--------|-------------|
 | 1 | Manual Pipeline | Superseded | User invokes each agent, checks `.scratch/`, triggers next agent manually |
 | 2 | Coordinator + Skills | **Current** | Coordinator agent reads state and routes. Skills carry workflow logic. User reviews between stages |
-| 3 | Parallel Reviewers | Available | Coordinator spawns all four reviewers as parallel subagents. Each writes to `.scratch/reviews/` independently |
+| 3 | Parallel Reviewers | Available | Coordinator spawns all four reviewers as parallel subagents. Each appends a `review-feedback` record to `.scratch/handoff.jsonl` independently |
 | 4 | Agent Teams | Experimental | Reviewers run as an Agent Team with peer-to-peer messaging. Claude Code only, Opus model, ~5x token cost |
 | 5 | Full Team Orchestration | Future | Entire pipeline runs as coordinated team. Blocked by: experimental status, single-model constraint, no cross-tool support |
 
@@ -126,43 +126,43 @@ The `.scratch/` directory holds temporary files for the current feature cycle. I
 
 ```
 .scratch/
-├── current-feature.md        # Active feature scope (from PRD agent)
-├── design-notes.md           # Architecture guidance (from system-design agent)
+├── handoff.jsonl             # Append-only structured handoff log (all agents)
 ├── implementation-plan.md    # TDD cycle plan (from feature-implementer)
-├── build-failure.md          # Quality gate failure output (deleted on success)
-├── review-summary.md         # Consolidated reviewer feedback
 ├── escalations.md            # Items requiring human decision
-├── eval-<feature-name>.md    # Feature evaluation scorecard
-├── tmp/                      # Intermediate computation files (auto-cleaned)
-└── reviews/
-    ├── code-quality.md       # Style and readability findings
-    ├── test-coverage.md      # Test quality findings
-    ├── security.md           # Vulnerability findings
-    └── doc-review.md         # Documentation coherence findings
+├── eval-<req-id>.md          # Feature evaluation scorecard
+└── tmp/                      # Intermediate computation files (auto-cleaned)
 ```
+
+`handoff.jsonl` carries five record types, one JSON object per line:
+
+| Record `type` | Producer | Schema |
+|---|---|---|
+| `prd-entry` | product-requirements-expert | `schemas/scratch/prd-entry.schema.json` |
+| `design-block` | system-design-expert | `schemas/scratch/design-block.schema.json` |
+| `build-failure` | feature-implementer | `schemas/scratch/build-failure.schema.json` |
+| `build-pass` | feature-implementer | `schemas/scratch/build-pass.schema.json` |
+| `review-feedback` | each reviewer | `schemas/scratch/review-feedback.schema.json` |
 
 ### File Lifecycle
 
-See the `pipeline-handoff` skill for which agent creates and consumes each file.
+See the `pipeline-handoff` skill for which agent appends each record type and how the coordinator validates them at agent transitions.
 
 ### File Templates
 
-Templates for all scratch files are in `.claude/templates/`:
+Templates for human-read markdown files are in `.claude/templates/`:
 
 | Template | Used By | When |
 |----------|---------|------|
-| `current-feature.md` | product-requirements-expert | Feature scope approved |
-| `design-notes.md` | system-design-expert | Architecture validated |
 | `implementation-plan.md` | feature-implementer | Before coding |
-| `review.md` | reviewer agents | After implementation |
-| `review-summary.md` | feature-implementer | After processing reviews |
-| `escalations.md` | feature-implementer | When [ESCALATE] items exist |
+| `escalations.md` | feature-implementer | When `tag: "escalate"` findings or `verdict: "escalated"` records exist |
+
+JSONL records do not use markdown templates — they are validated against the JSON Schemas in `schemas/scratch/`.
 
 ### Rules
 
 1. **One feature at a time** — Clear scratch before starting new feature.
-2. **Agents own their files** — Only the designated agent writes to each file.
-3. **Read before write** — Agents read upstream files before creating their own.
-4. **Status tracking** — Each file includes a Status field.
-5. **Traceability** — Every file references the requirement ID (REQ-XX-NNN).
+2. **Agents own their record types** — Each agent appends only the record types listed above.
+3. **Read before write** — Agents read upstream records before appending their own.
+4. **Append-only** — Never edit, reorder, or delete prior records in `handoff.jsonl`. Use `supersedes_record_at` (where supported) to correct a prior decision.
+5. **Traceability** — Every record references the requirement ID (`req_id` matching `^REQ-[A-Z]+-[0-9]{3}$`).
 6. **No system /tmp** — Use `.scratch/tmp/` for intermediate computation files.

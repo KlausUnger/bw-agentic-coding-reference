@@ -14,39 +14,45 @@ metadata:
 
 ## Review Phase
 
-After the feature-implementer passes the quality gate, invoke all four reviewers in parallel:
+After the feature-implementer appends a `build-pass` record to `.scratch/handoff.jsonl`, invoke all four reviewers in parallel:
 
-| Reviewer | Output File | Focus |
+| Reviewer | `author` value | Focus |
 |---|---|---|
-| code-quality-reviewer | `.scratch/reviews/code-quality.md` | Readability, Go style guide |
-| test-reviewer | `.scratch/reviews/test-coverage.md` | Test pyramid, coverage, edge cases |
-| security-reviewer | `.scratch/reviews/security.md` | OWASP, vulnerabilities, supply chain |
-| doc-reviewer | `.scratch/reviews/doc-review.md` | Documentation coherence, structure |
+| code-quality-reviewer | `"code-quality-reviewer"` | Readability, Go style guide |
+| test-reviewer | `"test-reviewer"` | Test pyramid, coverage, edge cases |
+| security-reviewer | `"security-reviewer"` | OWASP, vulnerabilities, supply chain |
+| doc-reviewer | `"doc-reviewer"` | Documentation coherence, structure |
+
+Each reviewer appends one `review-feedback` record. Schema: [`schemas/scratch/review-feedback.schema.json`](../../../schemas/scratch/review-feedback.schema.json).
 
 ## Output Protocol (Reviewers)
 
-Your sole deliverable is the review file. The pipeline cannot proceed without it.
+Your sole deliverable is the appended `review-feedback` record. The pipeline cannot proceed without it.
 
-1. **Use the Write tool** to create the review file at the path in the reviewer table above. Use the template in `.claude/templates/review.md`.
-2. Write the file BEFORE producing your reply. Drafting the review in your head or in the reply is not enough — the file must exist on disk.
-3. If you have no findings, still call Write with `Status: APPROVED` and an empty findings list. An empty file is a valid output; a missing file is not.
-4. **Verify** the file was created by using the Read tool on the same path. If Read fails, call Write again before replying.
-5. Your reply to the caller MUST be exactly one line: `Wrote review to .scratch/reviews/<file>.md (<status>)`.
-6. Do NOT include review content, summaries, or analysis in your reply. The caller reads the file.
+1. **Read** `.scratch/handoff.jsonl` first. If the file does not exist, the implementer has not signalled gate-pass — abort and report the missing precondition.
+2. **Append one line** to `.scratch/handoff.jsonl`: a single JSON object conforming to the `review-feedback` schema. Required fields: `type` (`"review-feedback"`), `req_id`, `ts`, `author` (your reviewer name), `verdict` (`approved` | `changes_requested` | `blocked`), `findings` (array, possibly empty when `verdict: "approved"`).
+3. Each finding requires `tag`, `location`, `description`. Add `fix` for `tag: "autofix"`. Add `clarify_target` for `tag: "clarify"`. Severity is optional.
+4. **Preserve every prior line verbatim** when appending. Append-only is non-negotiable.
+5. **Verify** the append succeeded by reading the file back and confirming your record is the last line.
+6. Your reply to the caller MUST be exactly one line: `Appended review-feedback (<verdict>) for <req_id>`.
+7. Do NOT include review content, summaries, or analysis in your reply. The caller reads the record.
 
-**Why:** when review content lands in the reply instead of the file, the dispatcher cannot route fixes, artifact-owner agents cannot read findings, and the audit trail is lost. Stopping just before Write forces the user to re-run the review — this is the most common reviewer failure mode.
+**Why:** when review content lands in the reply instead of the file, the dispatcher cannot route fixes, artifact-owner agents cannot read findings, and the audit trail is lost. Stopping before the append forces the user to re-run the review — this is a recurring reviewer failure mode.
+
+### Example Record
+
+```json
+{"type":"review-feedback","req_id":"REQ-XX-099","ts":"2026-05-08T16:30:00Z","author":"code-quality-reviewer","verdict":"changes_requested","findings":[{"tag":"autofix","location":"internal/report/summary.go:142","description":"Variable name `r` shadows the package-level `r`.","fix":"Rename loop variable to `row`."},{"tag":"blocked","location":"internal/report/summary.go:160","description":"Division by zero possible when cache_eligible_token_count is 0.","severity":"critical"}],"approved_aspects":["Test naming follows conventions","Error wrapping uses fmt.Errorf with %w"]}
+```
 
 ## Feedback Tags
 
 | Tag | Meaning | Action |
 |---|---|---|
-| `[AUTOFIX]` | Clear fix, no decision needed | Route to artifact owner |
-| `[BLOCKED]` | Critical issue, must fix before merge | Route to artifact owner; escalate if unclear |
-| `[ESCALATE]` | Needs human decision | Write to `.scratch/escalations.md` |
-| `[CLARIFY:prd]` | Requirement unclear | Route to product-requirements-expert |
-| `[CLARIFY:system-design]` | Architecture question | Route to system-design-expert |
-| `[CLARIFY:security-reviewer]` | Security question | Route to security-reviewer |
-| `[CLARIFY:doc-reviewer]` | Documentation question | Route to doc-reviewer |
+| `autofix` | Clear fix, no decision needed | Route to artifact owner |
+| `blocked` | Critical issue, must fix before merge | Route to artifact owner; escalate if unclear |
+| `escalate` | Needs human decision | Append to `.scratch/escalations.md` |
+| `clarify` (with `clarify_target`) | Requirement, design, or review question | Route to the named agent |
 
 ## Artifact Ownership
 
@@ -62,30 +68,26 @@ Review feedback targets the artifact, not a fixed agent. Route fixes to the owni
 
 Do not bundle doc fixes into a feature-implementer call. Do not send code fixes to doc agents.
 
-## Review Output Format
-
-Each reviewer writes to their output file using the template in `.claude/templates/review.md`.
-
 ## Issue Classification
 
 | Checklist Category | Default Severity | Tag |
 |--------------------|-----------------|-----|
-| Cross-document coherence | Critical | `[BLOCKED]` |
-| PRD boundary violations (Go code, function signatures, internal references) | Critical | `[BLOCKED]` |
-| Security vulnerabilities (CRITICAL/HIGH per `security-review` skill) | Critical | `[BLOCKED]` |
-| Structural issues (missing anchors, broken links) | Fixable | `[AUTOFIX]` |
-| Writing standards | Fixable | `[AUTOFIX]` |
+| Cross-document coherence | Critical | `blocked` |
+| PRD boundary violations (Go code, function signatures, internal references) | Critical | `blocked` |
+| Security vulnerabilities (CRITICAL/HIGH per `security-review` skill) | Critical | `blocked` |
+| Structural issues (missing anchors, broken links) | Fixable | `autofix` |
+| Writing standards | Fixable | `autofix` |
 
 ## Processing Reviews
 
 After all reviewers complete:
 
-0. Verify all four review files exist at `.scratch/reviews/{code-quality,test-coverage,security,doc-review}.md`. For each missing file, re-dispatch the corresponding reviewer ONCE with this prompt: `"Your previous run returned without writing .scratch/reviews/<file>.md. Run the review now. Your only deliverable is that file — see Output Protocol in review-checklist."` If a file is still missing after the retry, append an `[ESCALATE]` entry to `.scratch/escalations.md` naming the reviewer and stop — do not proceed to step 1.
-1. feature-implementer reads all four review files.
-2. `[AUTOFIX]` items: fix immediately.
-3. `[BLOCKED]` items: fix immediately; escalate if fix is unclear.
-4. `[ESCALATE]` items: write to `.scratch/escalations.md`.
-5. `[CLARIFY:agent]` items: request clarification from specified agent.
-6. Write consolidated results to `.scratch/review-summary.md`.
-7. If all reviewers approve, feature is complete.
-8. If changes were needed, re-run quality gate and re-invoke reviewers.
+0. Verify each of the four reviewers has appended a `review-feedback` record for the current `req_id` since the latest `build-pass`. For each missing record, re-dispatch the corresponding reviewer ONCE with this prompt: `"Your previous run returned without appending a review-feedback record to .scratch/handoff.jsonl. Run the review now. Your only deliverable is that record — see Output Protocol in review-checklist."` If a record is still missing after the retry, append an entry to `.scratch/escalations.md` naming the reviewer and stop — do not proceed to step 1.
+1. feature-implementer reads all four `review-feedback` records (latest per reviewer for the active `req_id`).
+2. `tag: "autofix"` findings: fix immediately using the `fix` field.
+3. `tag: "blocked"` findings: fix immediately; escalate if fix is unclear.
+4. `tag: "escalate"` findings: append the description to `.scratch/escalations.md`.
+5. `tag: "clarify"` findings: request clarification from the agent named in `clarify_target`.
+6. (No consolidated summary file needed; the four `review-feedback` records are the canonical record.)
+7. If all four `verdict` values are `"approved"`, feature is complete.
+8. If any `verdict` is `"changes_requested"` or `"blocked"`, re-run the quality gate (append fresh `build-failure`/`build-pass` records) and re-invoke reviewers.

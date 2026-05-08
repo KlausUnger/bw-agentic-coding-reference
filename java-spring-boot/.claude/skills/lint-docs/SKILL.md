@@ -77,7 +77,8 @@ Verify these invariants hold across documents:
 - Requirement IDs referenced in system-design.md exist in prd.md.
 - Configuration properties in prd.md match `application.yml`.
 - State file names match across pipeline-coordinator, pipeline-handoff skill, and agents README.
-- Review output filenames match across reviewer agents, review-checklist skill, and agents README.
+- Reviewer `author` enum values match across reviewer agents, review-checklist skill, agents README, and `schemas/scratch/review-feedback.schema.json`.
+- Schema files (`schemas/scratch/*.json`) are referenced consistently from the skills that produce or consume each record type.
 
 ### 7. Writing Standards
 

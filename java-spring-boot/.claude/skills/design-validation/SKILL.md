@@ -12,6 +12,45 @@ metadata:
   author: team
 ---
 
+## Input Contract
+
+The active feature scope arrives as a `type: "prd-entry"` record in `.scratch/handoff.jsonl` (one JSON object per line, append-only). Schema: [`schemas/scratch/prd-entry.schema.json`](../../../schemas/scratch/prd-entry.schema.json).
+
+**Read discipline:**
+
+1. Read `.scratch/handoff.jsonl`. Take the last `type: "prd-entry"` record as the active scope.
+2. The pipeline-coordinator validates the record against the schema before dispatching you; you may assume the required fields are present and well-typed. If the record is missing or fails a sanity check (e.g. `req_id` does not match the PRD), append a `design-block` record with `verdict: "escalated"` rather than papering over malformed input.
+3. Use `acceptance_criteria`, `file_targets`, and `test_names` from the record verbatim when producing your `design-block` record. Do not re-derive them; that is the rework loop the JSONL handoff exists to break.
+4. If a required structural field is missing or contradicts the PRD, the right action is to bounce back via `verdict: "needs_changes"` (or `"escalated"` for unresolvable conflicts), not to fill in guesses.
+
+**Forbidden:** re-reading `docs/prd.md` to reconstruct scope when the prd-entry record is present. The record is the contract.
+
+## Output Contract
+
+Append one `design-block` record to `.scratch/handoff.jsonl` per dispatch. Schema: [`schemas/scratch/design-block.schema.json`](../../../schemas/scratch/design-block.schema.json).
+
+**Required fields:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | `"design-block"` | Discriminator. |
+| `req_id` | string `^REQ-[A-Z]+-[0-9]{3}$` | Same as the prd-entry being implemented. |
+| `ts` | ISO 8601 string | Timestamp at append. |
+| `author` | `"system-design-expert"` | Pinned. |
+| `verdict` | enum | `approved` (initial design ready), `needs_changes` (PRE/SDE rework needed), `blocked` (cannot proceed), `revised` (design updated after build-failure escalation), `escalated` (human decision needed). |
+| `architectural_fit` | string | How the feature integrates with `docs/system-design.md`. |
+| `primary_paths` | array of paths | At least one. The starting target set for the implementer. |
+
+**Optional fields:** `supporting_paths`, `integration_points`, `patterns` (each `{ref, description}`), `risks` (each `{risk, mitigation}`), `escalations` (required when `verdict == "escalated"`), `supersedes_record_at` (line number of the prior design-block this revision supersedes; required when `verdict == "revised"`), `notes`.
+
+**Append-only discipline:** Read `.scratch/handoff.jsonl` first. Preserve every prior line verbatim. Append your record as the last line, terminated by `\n`. Never edit, reorder, or delete prior records — `supersedes_record_at` is how you correct a prior decision.
+
+### Example Record
+
+```json
+{"type":"design-block","req_id":"REQ-XX-099","ts":"2026-05-08T14:00:00Z","author":"system-design-expert","verdict":"approved","architectural_fit":"Cache miss diagnostics live in the report module alongside existing per-component rates; no new module, extends SummaryReport.","primary_paths":["src/main/java/com/example/reference/report/SummaryReport.java","src/test/java/com/example/reference/report/SummaryReportTest.java"],"integration_points":["summary report row gains a cacheMissRate column derived from CacheMeasure"],"patterns":[{"ref":"src/main/java/com/example/reference/report/SummaryReport.java:120","description":"existing per-component rate computation pattern"}],"risks":[{"risk":"divisor zero when cacheEligibleTokenCount is 0","mitigation":"emit null with insufficientData flag"}]}
+```
+
 ## Design Principles
 
 Apply these principles when evaluating features:

@@ -15,36 +15,36 @@ metadata:
 
 ## When to Run
 
-Run after all four reviewers have approved (all `.scratch/reviews/*.md` contain `Status: APPROVED`). The coordinator loads this skill and writes the scorecard before declaring the feature complete.
+Run after each of the four reviewers has appended a `review-feedback` record with `verdict: "approved"` to `.scratch/handoff.jsonl` for the active `req_id` (latest record per reviewer). The coordinator loads this skill and writes the scorecard before declaring the feature complete.
 
 ## Inputs
 
-| File | Purpose |
+`.scratch/handoff.jsonl` — the append-only handoff log; all data the scorecard needs is in the records below, filtered by the active `req_id`.
+
+| Record | Purpose |
 |---|---|
-| `.scratch/current-feature.md` | Feature name (from `Pipeline:` header) |
-| `.scratch/reviews/security.md` | Security reviewer verdict |
-| `.scratch/reviews/code-quality.md` | Code quality reviewer verdict |
-| `.scratch/reviews/test-coverage.md` | Test reviewer verdict |
-| `.scratch/reviews/doc-review.md` | Doc reviewer verdict |
-| `.scratch/build-failure.md` | Retry count (if file existed during pipeline; may be deleted on success) |
-| `.scratch/implementation-plan.md` | Retry history (check `Retry` references) |
+| Latest `prd-entry` | Feature name (from `req_id`); requirement title |
+| Latest `design-block` per `req_id` | Verdict; revision history (count records where `verdict == "revised"`) |
+| All `build-failure` records for `req_id` | Retry cycles (count records since the latest `design-block`) |
+| Latest `build-pass` for `req_id` | Quality-gate-passed marker |
+| Latest `review-feedback` per reviewer for `req_id` | Reviewer verdicts |
 
 ## Scoring Criteria
 
 | Criterion | Score | How to Determine |
 |---|---|---|
-| Tests pass | Yes / No | Quality gate passed (feature reached review stage) |
-| Security approved | Yes / No | `.scratch/reviews/security.md` contains `Status: APPROVED` |
-| Code quality approved | Yes / No | `.scratch/reviews/code-quality.md` contains `Status: APPROVED` |
-| Test coverage approved | Yes / No | `.scratch/reviews/test-coverage.md` contains `Status: APPROVED` |
-| Doc review approved | Yes / No | `.scratch/reviews/doc-review.md` contains `Status: APPROVED` |
+| Tests pass | Yes / No | A `build-pass` record exists for `req_id` after all `build-failure` records |
+| Security approved | Yes / No | Latest `review-feedback` with `author: "security-reviewer"` has `verdict: "approved"` |
+| Code quality approved | Yes / No | Latest `review-feedback` with `author: "code-quality-reviewer"` has `verdict: "approved"` |
+| Test coverage approved | Yes / No | Latest `review-feedback` with `author: "test-reviewer"` has `verdict: "approved"` |
+| Doc review approved | Yes / No | Latest `review-feedback` with `author: "doc-reviewer"` has `verdict: "approved"` |
 | All 4 reviewers approved | Yes / No | All four above are Yes |
-| Build retry cycles | 0–3+ | Count from `Retry` field in `.scratch/build-failure.md` history, or 0 if no failures occurred |
-| Design revisions | 0–N | Count `Status: REVISED` entries in `.scratch/design-notes.md` |
+| Build retry cycles | 0–3+ | Count of `build-failure` records for `req_id` since the latest `design-block` |
+| Design revisions | 0–N | Count of `design-block` records for `req_id` with `verdict: "revised"` |
 
 ## Output Format
 
-Write to `.scratch/eval-<feature-name>.md` where `<feature-name>` is the `Pipeline:` value from `.scratch/current-feature.md`, lowercased with spaces replaced by hyphens.
+Write to `.scratch/eval-<feature-name>.md` where `<feature-name>` is the `req_id` field of the latest `type: "prd-entry"` record in `.scratch/handoff.jsonl`, lowercased (e.g. `eval-req-xx-058.md`).
 
 ```markdown
 ---

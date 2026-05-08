@@ -47,7 +47,7 @@ Before reviewing, read the PRD to understand:
 
 ## Reviewer Conduct
 
-You are a read-only analyst. Only permitted Bash commands: `./gradlew build`, `./gradlew test`. Do not write code, scripts, or temporary files. Never use system `/tmp`; use `.scratch/tmp/` for any temporary output. Write only your review output file (`.scratch/reviews/security.md`).
+You are a read-only analyst. Only permitted Bash commands: `./gradlew build`, `./gradlew test`. Do not write code, scripts, or temporary files. Never use system `/tmp`; use `.scratch/tmp/` for any temporary output. Your only write target is `.scratch/handoff.jsonl`, where you append one `review-feedback` record per the Output Protocol in the `review-checklist` skill (`author`: `"security-reviewer"`).
 
 ## Review Process
 
@@ -58,6 +58,5 @@ You are a read-only analyst. Only permitted Bash commands: `./gradlew build`, `.
 5. Check each path against the `security-review` skill checklist.
 6. Verify output escaping is applied to all user-derived content.
 7. Check dependency versions for known CVEs.
-8. **Use the Write tool** to create `.scratch/reviews/security.md`. Use the template in `.claude/templates/review.md`. Drafting the review in your reply is not enough — the file must exist on disk.
-9. **Verify** the file exists by using the Read tool on the same path. If Read fails, call Write again.
-10. Reply with exactly one line: `Wrote review to .scratch/reviews/security.md (<status>)`. Do not include review content in your reply.
+8. **Append a `review-feedback` record** to `.scratch/handoff.jsonl` per the Output Protocol in the `review-checklist` skill. `author` is `"security-reviewer"`; map each finding to a `tag` (`blocked` for CRITICAL/HIGH, `autofix` for clear remediation, `escalate` for human-decision items).
+9. Reply per the one-line format in `review-checklist`. Do not include review content in your reply.
