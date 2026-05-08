@@ -25,25 +25,31 @@ metadata:
 
 ### 1. Root Doc Alignment
 
-Verify both projects match the naming and structure in `docs/specialist-agent-workflow.md`.
+Verify both projects match the naming and structure in `docs/specialist-agent-workflow.md` and the JSONL handoff ADR (`docs/adr/2026-05-08-append-only-jsonl-handoffs.md` in each project).
 
-**Scratch file names:**
+**Scratch state:**
 
-| Root Doc Name | Expected In Projects |
-|---|---|
-| `.scratch/current-feature.md` | product-requirements-expert output |
-| `.scratch/design-notes.md` | system-design-expert output |
-| `.scratch/implementation-plan.md` | feature-implementer output |
-| `.scratch/review-summary.md` | feature-implementer consolidation |
-| `.scratch/escalations.md` | feature-implementer escalations |
-| `.scratch/reviews/security.md` | security-reviewer output |
-| `.scratch/reviews/code-quality.md` | code-quality-reviewer output |
-| `.scratch/reviews/test-coverage.md` | test-reviewer output |
-| `.scratch/reviews/doc-review.md` | doc-reviewer output |
-| `.scratch/build-failure.md` | feature-implementer failure output (deleted on success) |
-| `.scratch/eval-*.md` | coordinator evaluation scorecard (via feature-eval skill) |
+| Path | Producer | Notes |
+|---|---|---|
+| `.scratch/handoff.jsonl` | every pipeline agent | Append-only JSONL log; record types below |
+| `.scratch/implementation-plan.md` | feature-implementer | Self-tracking only, no handoff gate |
+| `.scratch/escalations.md` | feature-implementer | Human-read escalations |
+| `.scratch/eval-*.md` | coordinator (via feature-eval skill) | Per-feature scorecard |
+| `.scratch/tmp/` | any agent | Intermediate computation; never use system `/tmp` |
 
-Check these names in: pipeline-handoff skill, pipeline-coordinator agent, agents README, templates directory.
+**Record types in `handoff.jsonl`** (one JSON object per line, schema in `schemas/scratch/<type>.schema.json`):
+
+| Record `type` | Producer | Replaces (legacy markdown) |
+|---|---|---|
+| `prd-entry` | product-requirements-expert | `.scratch/current-feature.md` |
+| `design-block` | system-design-expert | `.scratch/design-notes.md` |
+| `build-failure` | feature-implementer | `.scratch/build-failure.md` |
+| `build-pass` | feature-implementer | (new — explicit success marker) |
+| `review-feedback` | each reviewer | `.scratch/reviews/<reviewer>.md` |
+
+The `review-feedback` record's `author` enum (`code-quality-reviewer`, `test-reviewer`, `security-reviewer`, `doc-reviewer`) is the canonical reviewer identity — there are no per-reviewer markdown files.
+
+Check these names in: `pipeline-handoff` skill, `pipeline-coordinator` agent, agents README, schemas directory, and the JSONL ADR.
 
 **Agent names:**
 
@@ -110,10 +116,10 @@ For each agent in both projects, verify:
 **Write Scope check:**
 
 Every agent that writes files must have a `## Write Scope` section listing permitted paths and an explicit prohibition. Verify:
-- [ ] product-requirements-expert: writes `docs/prd.md`, `.scratch/current-feature.md`
-- [ ] system-design-expert: writes `docs/system-design.md`, `docs/adr/`, `.scratch/design-notes.md`
-- [ ] feature-implementer: writes source code, `.scratch/implementation-plan.md`, `.scratch/build-failure.md`
-- [ ] Reviewer agents: write only `.scratch/reviews/{name}.md`
+- [ ] product-requirements-expert: writes `docs/prd.md`, `.scratch/handoff.jsonl` (`prd-entry` records only)
+- [ ] system-design-expert: writes `docs/system-design.md`, `docs/adr/`, `.scratch/handoff.jsonl` (`design-block` records only)
+- [ ] feature-implementer: writes source code, `.scratch/implementation-plan.md`, `.scratch/handoff.jsonl` (`build-failure` / `build-pass` records only), `.scratch/escalations.md`
+- [ ] Reviewer agents: write only `.scratch/handoff.jsonl` (`review-feedback` records, append-only, with the matching `author` value)
 
 ### 4. Skill Parity
 
@@ -255,6 +261,7 @@ Keep each project's `.claude/skills/seed/SKILL.md` in sync with the template fil
 | TDD principles | `docs/tdd-principles.md` |
 | Testing principles | `docs/testing-principles.md` |
 | ADR index | `docs/adr/` |
+| Handoff schemas | `schemas/scratch/` (5 schema files: prd-entry, design-block, review-feedback, build-failure, build-pass) |
 
 **Explicit non-seed files** (must **not** appear in Step 2 or Step 4; they're listed under "Files That Stay in Template Only" or are user code):
 - `.claude/skills/harvest/`, `.claude/skills/seed/` — template management

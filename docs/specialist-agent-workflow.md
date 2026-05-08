@@ -19,16 +19,17 @@ The pipeline enforces separation of concerns: agents that think about *what* to 
 
 ```
 coordinator → product-requirements-expert → system-design-expert → feature-implementer → 4 reviewers (parallel) → eval
-                .scratch/current-feature.md    .scratch/design-notes.md    .scratch/implementation-plan.md     .scratch/reviews/*.md    .scratch/eval-*.md
+                .scratch/handoff.jsonl       .scratch/handoff.jsonl    .scratch/handoff.jsonl    .scratch/handoff.jsonl    .scratch/eval-*.md
+                (prd-entry)                  (design-block)            (build-pass)              (review-feedback ×4)
 ```
 
 **Failure-recovery loop** (build/test fails):
 
 ```
 feature-implementer (quality gate fails)
-    → .scratch/build-failure.md (Retry 1–2) → coordinator → feature-implementer (retry with error context)
-    → .scratch/build-failure.md (Retry 3)   → coordinator → system-design-expert (revise or [ESCALATE])
-    → .scratch/design-notes.md (Status: REVISED) → coordinator → feature-implementer (retry reset)
+    → handoff.jsonl: build-failure (retry 1–2) → coordinator → feature-implementer (retry with error context)
+    → handoff.jsonl: build-failure (retry 3)   → coordinator → system-design-expert (revise or escalated)
+    → handoff.jsonl: design-block (verdict: revised) → coordinator → feature-implementer (retry reset)
 ```
 
 **Shortcuts** (coordinator decides):
@@ -39,29 +40,31 @@ Arch question   → system-design-expert (standalone)
 Review only     → any single reviewer (standalone)
 ```
 
-Each arrow is a `.scratch/` file write. Any `NEEDS_CHANGES`, `BLOCKED`, or `[ESCALATE]` status in a handoff file stops the pipeline. `BUILD_FAILED` triggers the retry loop. The coordinator reads state, routes, and never implements.
+Each arrow is an append to `.scratch/handoff.jsonl`. The coordinator validates each new record against its JSON Schema (`schemas/scratch/<type>.schema.json`) at every transition; malformed or missing records bounce back to the upstream agent without consuming the next dispatch. Any record with `verdict: "blocked"`, `verdict: "escalated"`, or a finding with `tag: "escalate"` halts the pipeline. A `build-failure` record triggers the retry loop. The coordinator reads state, routes, and never implements.
 
 ### Handoff Signals
 
-Every `.scratch/` handoff file uses this header format:
+Handoff state lives in `.scratch/handoff.jsonl` — one JSON record per line, append-only. Each record carries a `type` discriminator that picks one of five schemas in `schemas/scratch/`:
 
-```markdown
----
-Pipeline: feature-auth-flow
-Stage: design → implementation
-Author: system-design-expert
-Timestamp: 2026-03-22T14:30:00Z
-Status: Ready for Implementation
-Recommendation: APPROVED
----
-```
+| `type` | Producer | Schema | Replaces (legacy markdown) |
+|---|---|---|---|
+| `prd-entry` | product-requirements-expert | `prd-entry.schema.json` | `current-feature.md` |
+| `design-block` | system-design-expert | `design-block.schema.json` | `design-notes.md` |
+| `build-failure` | feature-implementer | `build-failure.schema.json` | `build-failure.md` |
+| `build-pass` | feature-implementer | `build-pass.schema.json` | (new — explicit success marker) |
+| `review-feedback` | each reviewer | `review-feedback.schema.json` | `reviews/*.md` |
 
-**Blocking statuses that halt the pipeline:**
+Every record carries `type`, `req_id` (`^REQ-[A-Z]+-[0-9]{3}$`), `ts` (ISO 8601), and `author`. The active state for routing is the latest record per `(req_id, type)`. See the JSONL handoff ADR (`docs/adr/2026-05-08-append-only-jsonl-handoffs.md` in each project) for the rationale and migration record.
 
-- `NEEDS_CHANGES` — the previous agent must revise before the next stage runs
-- `BLOCKED` — an external dependency or decision is required; no agent can proceed
-- `[ESCALATE]` — human intervention required; the coordinator surfaces this immediately
-- `BUILD_FAILED` — quality gate failed; triggers the retry loop shown in the failure-recovery diagram in [§1 Pipeline Flow](#1-architecture-overview)
+**Why JSONL over per-stage markdown.** A single append-only log with typed records lets the coordinator validate each record against its JSON Schema at every transition. Malformed or missing handoffs bounce back to the upstream agent before the next specialist is dispatched. Append-only records also give a replayable audit trail of pipeline state, where mutable per-stage markdown files lost history on overwrite.
+
+**Blocking signals that halt the pipeline:**
+
+- `verdict: "needs_changes"` (on a `design-block`) — upstream must revise before the next stage runs
+- `verdict: "blocked"` (on a `design-block` or `review-feedback`) — an external dependency or decision is required
+- `verdict: "escalated"` (on a `design-block`) — human intervention required; the coordinator surfaces this immediately
+- A `build-failure` record — triggers the retry loop shown in the failure-recovery diagram above
+- A finding with `tag: "escalate"` (on a `review-feedback`) — the coordinator appends to `.scratch/escalations.md`
 
 ### Why File-Based Coordination
 
@@ -105,8 +108,9 @@ docs/prd.md (persistent)          docs/system-design.md (persistent)
 product-requirements-expert         system-design-expert
     │                                        │
     ▼                                        ▼
-.scratch/current-feature.md ──→ .scratch/design-notes.md ──→ feature-implementer
-   (what to build)                 (how it fits)              (reads both, modifies neither)
+.scratch/handoff.jsonl ──→ .scratch/handoff.jsonl ──→ feature-implementer
+   (prd-entry record:           (design-block record:        (reads both record types,
+   what to build)                how it fits)                modifies persistent docs via owning agents)
 ```
 
 The pipeline creates ephemeral handoff files in `.scratch/` that extract the relevant slice of the persistent specs for the current feature. The implementer reads the handoffs and the full specs, but never modifies `docs/prd.md` or `docs/system-design.md` directly. When it discovers a requirement gap or design conflict during TDD, it invokes the owning agent:
@@ -122,7 +126,8 @@ This routing is defined in the `tdd-workflow` skill's design-check decision tree
 | Type | Location | Lifecycle | Purpose |
 |---|---|---|---|
 | Persistent | `docs/prd.md`, `docs/system-design.md`, `docs/adr/` | Committed to git, evolves across features | Source of truth for requirements and architecture |
-| Ephemeral | `.scratch/current-feature.md`, `.scratch/design-notes.md` | Gitignored, cleared between features | Scoped handoff for the current feature cycle |
+| Persistent | `schemas/scratch/*.json` | Committed to git, evolves with the handoff contract | JSON Schema for each record type in `handoff.jsonl` |
+| Ephemeral | `.scratch/handoff.jsonl` (`prd-entry`, `design-block` records) | Gitignored, cleared between features | Scoped handoff for the current feature cycle |
 
 The persistent docs grow over time. The ephemeral handoffs extract the relevant slice for one feature. After a feature merges, the owning agents update the persistent docs to reflect what was built — the `doc-sync` skill coordinates this.
 
@@ -268,11 +273,11 @@ Symlinks work on Linux/macOS natively and on Windows with `git config core.symli
 
 ### Level 3: Parallel Reviewer Subagents
 
-**What you get:** Four reviewers (security, code quality, test coverage, documentation) run as parallel subagents, each writing to `.scratch/reviews/`. The coordinator waits for all four to complete, then aggregates results.
+**What you get:** Four reviewers (security, code quality, test coverage, documentation) run as parallel subagents, each appending a `review-feedback` record to `.scratch/handoff.jsonl`. The coordinator waits for all four to complete, then aggregates results.
 
-**What it costs:** 4x token usage during the review phase (each reviewer has its own context window). Slight coordination complexity — you need to check that all four review files exist before proceeding.
+**What it costs:** 4x token usage during the review phase (each reviewer has its own context window). Slight coordination complexity — you need to check that all four `review-feedback` records exist (one per `author`) for the active `req_id` before proceeding.
 
-**How it works:** The coordinator spawns four subagents simultaneously using Claude Code's parallel subagent capability. Each reviewer reads the implementation handoff and the relevant source files, writes its review to `.scratch/reviews/{reviewer-name}.md`, and exits. The coordinator polls for completion (all four files exist with a `Recommendation:` line), then aggregates.
+**How it works:** The coordinator spawns four subagents simultaneously using Claude Code's parallel subagent capability. Each reviewer reads the latest `prd-entry`, `design-block`, and `build-pass` records plus the changed source files, then appends one `review-feedback` record (with its own `author` enum value and a `verdict`) and exits. The coordinator polls for completion by reading `handoff.jsonl` and confirming the latest `review-feedback` record exists for each of the four reviewer `author` values, then aggregates.
 
 **Alternative:** Copilot CLI's `/fleet` command can also decompose a review task into parallel subagents. If your team is GitHub-native and prefers Copilot, this is a viable alternative for the parallel review gate — though Claude Code's subagent architecture offers tighter control over tool access and model selection per reviewer.
 
@@ -390,25 +395,26 @@ your-project/
 │       └── doc-reviewer.md
 │
 ├── .scratch/                          # [ALL] Pipeline state — gitignored
-│   ├── current-feature.md            # Output of product-requirements-expert
-│   ├── design-notes.md               # Output of system-design-expert
-│   ├── implementation-plan.md        # Output of feature-implementer
-│   ├── build-failure.md              # Quality gate failure output (deleted on success)
-│   ├── review-summary.md             # Consolidated reviewer feedback
+│   ├── handoff.jsonl                 # Append-only structured handoff log (all agents)
+│   ├── implementation-plan.md        # TDD cycle plan (feature-implementer self-tracking)
 │   ├── escalations.md                # Items requiring human decision
-│   ├── eval-<feature-name>.md        # Feature evaluation scorecard
-│   └── reviews/                      # Parallel reviewer outputs
-│       ├── security.md
-│       ├── code-quality.md
-│       ├── test-coverage.md
-│       └── doc-review.md
+│   ├── eval-<req-id>.md              # Feature evaluation scorecard
+│   └── tmp/                          # Intermediate computation files
+│
+├── schemas/                           # [ALL] Handoff record schemas — committed
+│   └── scratch/
+│       ├── prd-entry.schema.json
+│       ├── design-block.schema.json
+│       ├── review-feedback.schema.json
+│       ├── build-failure.schema.json
+│       └── build-pass.schema.json
 │
 ├── docs/                              # [ALL] Project knowledge — agents read on demand
 │   ├── prd.md                        # Current product requirements
 │   ├── system-design.md             # Current system design
 │   ├── adr/                          # Architecture Decision Records
-│   │   ├── 001-database-choice.md
-│   │   └── 002-auth-strategy.md
+│   │   ├── 2026-03-22-skill-based-agent-architecture.md
+│   │   └── 2026-05-08-append-only-jsonl-handoffs.md
 │   └── documentation-standards.md   # Documentation standards
 │
 └── src/                               # Application source code
@@ -421,6 +427,8 @@ your-project/
 ---
 
 ## 6. Reference Implementations
+
+> **Note (2026-05-08):** The skill, agent, and coordinator excerpts in this section retain the legacy markdown-handoff format (`.scratch/current-feature.md`, `.scratch/design-notes.md`, `.scratch/reviews/*.md`, `.scratch/build-failure.md`) for historical comparison. The current contract is the append-only JSONL log defined in §1 (Handoff Signals) and the JSONL ADR (`docs/adr/2026-05-08-append-only-jsonl-handoffs.md` in each project). The Go and Java sample projects in this monorepo implement the JSONL form; the legacy snippets below remain only to show the prior architecture.
 
 ### The `pipeline-handoff` Skill
 
@@ -453,51 +461,49 @@ compatibility: claude-code, opencode, github-copilot
 
 ## Handoff Conditions
 
+All transitions are gated by the latest record per `(req_id, type)` in `.scratch/handoff.jsonl`. The coordinator validates each new record against its JSON Schema (`schemas/scratch/<type>.schema.json`); malformed or missing records bounce back to the upstream agent.
+
 ### product-requirements-expert → system-design-expert
-- **Trigger:** `.scratch/current-feature.md` exists with `Status: Ready for Implementation`
-- **Blocks on:** `NEEDS_CHANGES`, `BLOCKED`, `[ESCALATE]`
-- **Input:** `.scratch/current-feature.md` + `docs/prd.md` (if updated)
-- **Output:** `.scratch/design-notes.md`
+- **Trigger:** Latest `prd-entry` record passes schema validation (required fields present, `req_id` matches `^REQ-[A-Z]+-[0-9]{3}$`, `test_names` non-empty)
+- **Blocks on:** Schema validation failure
+- **Input:** `prd-entry` record + `docs/prd.md` (if updated)
+- **Output:** `design-block` record appended by SDE
 
 ### system-design-expert → feature-implementer
-- **Trigger:** `.scratch/design-notes.md` exists with `Recommendation: APPROVED` or `Status: REVISED`
-- **Blocks on:** `NEEDS_CHANGES`, `BLOCKED`, `[ESCALATE]`
-- **Input:** `.scratch/design-notes.md` + `docs/system-design.md` (if updated)
-- **Output:** `.scratch/implementation-plan.md`
+- **Trigger:** Latest `design-block` record has `verdict: "approved"` or `"revised"` and passes schema validation
+- **Blocks on:** `verdict: "needs_changes"`, `"blocked"`, or `"escalated"`
+- **Input:** `design-block` record + `docs/system-design.md` (if updated)
+- **Output:** `build-failure` or `build-pass` record appended by implementer
 
 ### feature-implementer → parallel reviewers (happy path)
-- **Trigger:** Quality gate passes (build, test, lint)
-- **Blocks on:** `NEEDS_CHANGES`, `BLOCKED`, `[ESCALATE]`
-- **Input:** `.scratch/implementation-plan.md` + changed source files
-- **Output:** `.scratch/reviews/{reviewer}.md` (one per reviewer)
+- **Trigger:** Latest `build-pass` record exists for `req_id` (no later `build-failure`)
+- **Input:** `prd-entry` + `design-block` + changed source files + `.scratch/implementation-plan.md`
+- **Output:** Each reviewer appends one `review-feedback` record (with their `author` value)
 
 ### feature-implementer → retry loop (failure path)
-- **Trigger:** Quality gate fails — implementer writes `.scratch/build-failure.md` with `Status: BUILD_FAILED`
-- **Retry < 3:** Coordinator routes back to feature-implementer with `.scratch/build-failure.md` (error output), `.scratch/design-notes.md`, and `.scratch/implementation-plan.md`
-- **Retry = 3:** Coordinator escalates to system-design-expert. Design expert writes `Status: REVISED` in `.scratch/design-notes.md` or `[ESCALATE]` for human intervention. A design revision resets the retry counter to 0.
-- **On success:** Implementer deletes `.scratch/build-failure.md` and proceeds to reviewers
+- **Trigger:** Implementer appends a `build-failure` record (`retry: 1–3`)
+- **Retry < 3:** Coordinator routes back to feature-implementer with the latest `build-failure` record, the latest `design-block` record, and `.scratch/implementation-plan.md`
+- **Retry = 3:** Coordinator escalates to system-design-expert. SDE appends a new `design-block` with `verdict: "revised"` (and `supersedes_record_at`) or `verdict: "escalated"`. A `verdict: "revised"` record resets the retry counter — the next `build-failure` starts at `retry: 1`.
+- **On success:** Implementer appends a `build-pass` record. Prior `build-failure` records remain in the file as the diagnostic retry trail (append-only).
 
 ### Review gate → evaluation → completion
-- **Trigger:** All four files in `.scratch/reviews/` exist with `Recommendation:` line
-- **Pass condition:** All four recommendations are `APPROVED` → coordinator writes `.scratch/eval-<feature-name>.md` using the `feature-eval` skill
-- **Fail condition:** Any recommendation is `NEEDS_CHANGES` → route back to feature-implementer
-- **Escalate condition:** Any recommendation is `[ESCALATE]` → halt pipeline, notify human
+- **Trigger:** Each of the four reviewers has appended a `review-feedback` record for the active `req_id` since the latest `build-pass`
+- **Pass condition:** All four latest `review-feedback` records have `verdict: "approved"` → coordinator writes `.scratch/eval-<req-id>.md` using the `feature-eval` skill
+- **Fail condition:** Any latest `verdict` is `"changes_requested"` or `"blocked"` with non-empty findings → route back to feature-implementer to process findings
+- **Escalate condition:** Any finding has `tag: "escalate"` → coordinator appends to `.scratch/escalations.md` and halts the pipeline
 
 ## State File Inventory
 
-| File | Written By | Read By |
+| Path / Record | Written By | Read By |
 |---|---|---|
-| `.scratch/current-feature.md` | product-requirements-expert | system-design-expert, coordinator |
-| `.scratch/design-notes.md` | system-design-expert | feature-implementer, coordinator |
-| `.scratch/implementation-plan.md` | feature-implementer | all reviewers, coordinator |
-| `.scratch/reviews/security.md` | security-reviewer | coordinator |
-| `.scratch/reviews/code-quality.md` | code-quality-reviewer | coordinator |
-| `.scratch/reviews/test-coverage.md` | test-reviewer | coordinator |
-| `.scratch/reviews/doc-review.md` | doc-reviewer | coordinator |
-| `.scratch/review-summary.md` | feature-implementer | human (final check) |
-| `.scratch/escalations.md` | feature-implementer | human |
-| `.scratch/build-failure.md` | feature-implementer | coordinator, feature-implementer (retry), system-design-expert (escalation) |
-| `.scratch/eval-*.md` | coordinator (via feature-eval skill) | human |
+| `.scratch/handoff.jsonl` (`prd-entry` records) | product-requirements-expert | system-design-expert, feature-implementer, coordinator |
+| `.scratch/handoff.jsonl` (`design-block` records) | system-design-expert | feature-implementer, coordinator |
+| `.scratch/handoff.jsonl` (`build-failure` / `build-pass` records) | feature-implementer | coordinator, system-design-expert (escalation) |
+| `.scratch/handoff.jsonl` (`review-feedback` records, one per reviewer) | each reviewer | feature-implementer, coordinator |
+| `.scratch/implementation-plan.md` | feature-implementer | feature-implementer (self-tracking), reviewers |
+| `.scratch/escalations.md` | feature-implementer / coordinator | human |
+| `.scratch/eval-<req-id>.md` | coordinator (via feature-eval skill) | human |
+| `schemas/scratch/<type>.schema.json` | (committed; evolves with the handoff contract) | coordinator validates inbound records against these |
 
 ## Coordinator Rules
 
@@ -732,21 +738,21 @@ After features merge, persistent docs (`docs/prd.md`, `docs/system-design.md`) d
 
 After all reviewers approve a feature, the coordinator writes a scorecard that measures pipeline quality. This creates an audit trail and surfaces patterns — repeated build failures indicate design problems; repeated review cycles indicate unclear requirements.
 
-**Scoring criteria:**
+**Scoring criteria** (all derived from the latest record per `(req_id, type)` in `.scratch/handoff.jsonl`):
 
 | Criterion | How to Determine |
 |---|---|
-| Tests pass | Quality gate passed (feature reached review stage) |
-| Security approved | `.scratch/reviews/security.md` contains `Status: APPROVED` |
-| Code quality approved | `.scratch/reviews/code-quality.md` contains `Status: APPROVED` |
-| Test coverage approved | `.scratch/reviews/test-coverage.md` contains `Status: APPROVED` |
-| Doc review approved | `.scratch/reviews/doc-review.md` contains `Status: APPROVED` |
-| Build retry cycles | Count from `Retry` field in `.scratch/build-failure.md`, or 0 if no failures |
-| Design revisions | Count `Status: REVISED` entries in `.scratch/design-notes.md` |
+| Tests pass | Latest `build-pass` record exists for `req_id` (no later `build-failure`) |
+| Security approved | Latest `review-feedback` record with `author: "security-reviewer"` has `verdict: "approved"` |
+| Code quality approved | Latest `review-feedback` record with `author: "code-quality-reviewer"` has `verdict: "approved"` |
+| Test coverage approved | Latest `review-feedback` record with `author: "test-reviewer"` has `verdict: "approved"` |
+| Doc review approved | Latest `review-feedback` record with `author: "doc-reviewer"` has `verdict: "approved"` |
+| Build retry cycles | Count of `build-failure` records for `req_id` since the latest `design-block` (or feature start) |
+| Design revisions | Count of `design-block` records with `verdict: "revised"` for `req_id` |
 
-**Output:** `.scratch/eval-<feature-name>.md` with a PASS/FAIL verdict and retry cost assessment (0 = clean, 1–2 = minor issues, 3 = design revision needed).
+**Output:** `.scratch/eval-<req-id>.md` with a PASS/FAIL verdict and retry cost assessment (0 = clean, 1–2 = minor issues, 3 = design revision needed).
 
-**Rule:** PASS requires tests pass AND all four reviewers approve. A feature that required design revision is still a PASS if it ultimately succeeds, but the revision is noted.
+**Rule:** PASS requires the latest `build-pass` record AND all four latest `review-feedback` records with `verdict: "approved"`. A feature that required design revision is still a PASS if it ultimately succeeds, but the revision is noted.
 
 ---
 
@@ -851,13 +857,15 @@ After all reviewers approve a feature, the coordinator writes a scorecard that m
 1. Create `CLAUDE.md` in project root with build commands, conventions, and forbidden patterns
 2. Create `.claude/skills/pipeline-handoff/SKILL.md` with the routing table
 3. Define two agents: `pipeline-coordinator` and one specialist (start with `feature-implementer`)
-4. Create `.scratch/` directory and add it to `.gitignore`
-5. Run the pipeline manually (Level 1) for two weeks to validate the pattern
+4. Create `schemas/scratch/` and commit the five record schemas (`prd-entry`, `design-block`, `build-failure`, `build-pass`, `review-feedback`) — the coordinator validates inbound records against these
+5. Create `.scratch/` directory (containing the empty `handoff.jsonl`) and add `.scratch/` to `.gitignore`
+6. Run the pipeline manually (Level 1) for two weeks to validate the pattern
 
 **Do not:**
 - Create all eight agents at once — start with two, add as needed
 - Skip the manual phase — you need to see routing decisions before automating them
-- Over-engineer `.scratch/` state files — start simple, add fields when you need them
+- Skip schema validation — without the gate, malformed records reach the next agent unchecked (see §1 *Why JSONL over per-stage markdown*)
+- Over-engineer record schemas — start with the five canonical types, add fields when you need them
 
 ### Phase 2: Add Remaining Specialists (Week 3–4)
 

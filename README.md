@@ -2,7 +2,7 @@
 
 **The problem:** a single AI session that mixes requirements, design, implementation, and review produces inconsistent work. Context windows fill, intent drifts, and the output degrades in ways that are hard to audit.
 
-**The approach:** a file-based specialist pipeline. Eight agents with one job each, coordinating through `.scratch/` files instead of shared context. Living specs (`prd.md`, `system-design.md`, `adr/`) are the source of truth — not the code. One rules file (`CLAUDE.md`) works across Claude Code, OpenCode, and Copilot.
+**The approach:** a file-based specialist pipeline. Eight agents with one job each, coordinating through an append-only JSONL handoff log (`.scratch/handoff.jsonl`) validated against per-record JSON Schemas at every transition. Living specs (`prd.md`, `system-design.md`, `adr/`) are the source of truth — not the code. One rules file (`CLAUDE.md`) works across Claude Code, OpenCode, and Copilot.
 
 **What's here:** two working reference implementations (Go, Spring Boot), 18 portable skills, enforceable documentation standards, and a bidirectional `/seed` + `/harvest` loop to adopt the pattern in your own project and feed improvements back.
 
@@ -19,61 +19,61 @@ You type one sentence. The coordinator routes it. Agents read and update the gro
 ```
 You: "Let's discuss the feature for rate-limiting the public API"
 
-→ coordinator reads .scratch/, sees no active feature
+→ coordinator reads .scratch/handoff.jsonl, sees no active feature
 → routes to product-requirements-expert
   ├─ reads  docs/prd.md                     (existing requirements, non-goals)
   ├─ interviews you on goals + constraints
   ├─ writes docs/prd.md                     (appends REQ-RL-001…004)
-  └─ writes .scratch/current-feature.md     (scoped handoff for this feature)
+  └─ appends prd-entry record               (validated against prd-entry.schema.json)
 
 → coordinator routes to system-design-expert
   ├─ reads  docs/prd.md, docs/system-design.md, docs/adr/
   ├─ writes docs/system-design.md           (token-bucket section)
   ├─ writes docs/adr/0007-rate-limiting.md  (why token-bucket over leaky-bucket)
-  └─ writes .scratch/design-notes.md        (Status: APPROVED)
+  └─ appends design-block record            (verdict: approved)
 
 → coordinator routes to feature-implementer
-  ├─ reads  prd.md + system-design.md + both .scratch/ handoffs — modifies none
+  ├─ reads  prd.md + system-design.md + latest prd-entry/design-block records — modifies none
   ├─ TDD cycle: red → green → refactor
-  └─ quality gate passes (build, test, lint, deps-check)
+  └─ appends build-pass record              (quality gate: build, test, lint, deps-check)
 
 → coordinator spawns 4 reviewers in parallel
-  └─ security, code-quality, tests, docs → .scratch/reviews/*.md
+  └─ security, code-quality, tests, docs → review-feedback records (one per author)
 
-→ coordinator routes to eval → PASS
+→ coordinator routes to eval → PASS → writes .scratch/eval-<req-id>.md
 → doc-sync verifies prd.md / system-design.md / code have not drifted
 ```
 
-Persistent specs (`docs/`) are the source of truth and evolve across features. Ephemeral handoffs (`.scratch/`) scope one feature and are cleared after merge. The implementer reads both but writes to neither — if a requirement gap appears mid-TDD, it routes back to the owning agent instead of guessing.
+Persistent specs (`docs/`) are the source of truth and evolve across features. Ephemeral state in `.scratch/` (handoff log, implementation plan, escalations, eval scorecard) is cleared after merge. The implementer reads both but writes to neither — if a requirement gap appears mid-TDD, it routes back to the owning agent instead of guessing.
 
 ## Agent Pipeline
 
-The core pattern is a file-based specialist pipeline. Each agent has one job, reads defined inputs, and writes to known outputs. The filesystem is the coordination layer — auditable, interruptible, tool-agnostic.
+The core pattern is a file-based specialist pipeline. Each agent has one job, reads defined inputs, and writes to known outputs — record producers append to a shared handoff log, the coordinator routes from it. The filesystem is the coordination layer — auditable, interruptible, tool-agnostic.
 
 ```
 User Request
   │
   ▼
-Pipeline Coordinator ─── reads .scratch/ state, routes to next agent
+Pipeline Coordinator ─── validates each record against its JSON Schema, routes to next agent
   │
   ▼
-Product Requirements Expert ──→ .scratch/current-feature.md
+Product Requirements Expert ──→ prd-entry record
   │
   ▼
-System Design Expert ──→ .scratch/design-notes.md
+System Design Expert ──→ design-block record
   │
   ▼
 Feature Implementer ──→ quality gate (build, test, lint)
   │                       │
-  │ (passes)              │ (fails, up to 3 retries → escalate to design expert)
+  │ (build-pass)          │ (build-failure, up to 3 retries → escalate to design expert)
   ▼                       │
-4 Reviewers (parallel) ──→ .scratch/reviews/*.md
+4 Reviewers (parallel) ──→ review-feedback records (one per author)
   │
   ▼
-Evaluation ──→ .scratch/eval-<feature>.md
+Evaluation ──→ .scratch/eval-<req-id>.md
 ```
 
-Each arrow is a file write. The coordinator reads `.scratch/` state and routes to the correct specialist — it only routes, never implements. If the implementer fails the quality gate, the coordinator retries with error context (up to 3 attempts), then escalates to the design expert for revision.
+Each arrow is an append to `.scratch/handoff.jsonl`. The coordinator validates each new record against `schemas/scratch/<type>.schema.json` before routing — malformed or missing records bounce back to the upstream agent without dispatching the next specialist. The coordinator only routes, never implements. If the implementer fails the quality gate, it appends a `build-failure` record. The coordinator retries with that error context for up to 3 attempts, then escalates to the design expert for revision.
 
 ## Spec-Driven Development
 
@@ -217,7 +217,7 @@ The pipeline is an adoption ladder, not a fixed architecture. Pick the level tha
 | Level | Name | Status | What changes |
 |:-:|------|--------|--------------|
 | 1 | Manual Pipeline | Production | Human invokes each specialist agent by hand. Validates the pattern. |
-| 2 | Coordinator + Automated Routing | Production | A coordinator agent reads `.scratch/` state and routes to the next specialist. |
+| 2 | Coordinator + Automated Routing | Production | A coordinator agent reads `.scratch/handoff.jsonl`, validates each new record against its schema, and routes to the next specialist. |
 | 3 | Parallel Reviewers | Production | Four reviewers run as parallel subagents. Sub-5-minute review cycles. |
 | 4 | Agent Teams Collaborative Review | Experimental | Reviewers communicate directly. Requires Claude Code v2.1.32+, Opus 4.6, opt-in flag. |
 | 5 | Full Team Orchestration | Speculative | Coordinator-as-team-lead for the entire pipeline. Blocked on tooling maturity. |
