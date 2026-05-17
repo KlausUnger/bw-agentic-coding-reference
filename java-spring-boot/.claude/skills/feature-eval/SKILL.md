@@ -71,6 +71,7 @@ Timestamp: [ISO 8601]
 
 - **Overall:** PASS / FAIL
 - **Retry cost:** [0 = clean, 1-2 = minor issues, 3 = design revision needed]
+- **Bar clauses that required rework:** [list slugs from `bar_clause`-tagged findings, or "none"]
 - **Notes:** [any observations about the pipeline run]
 ```
 

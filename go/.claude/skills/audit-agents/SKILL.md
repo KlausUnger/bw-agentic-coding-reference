@@ -32,27 +32,45 @@ Run this audit after any change to:
 
 ### 2. Agent Thinness
 
-For each agent in `.claude/agents/`, `.opencode/agents/`, and `.github/agents/`:
-- [ ] No inline checklists, standards, or examples that exist in a skill or doc.
-- [ ] No inline design principles (belongs in `design-validation` skill).
-- [ ] No duplicated build-failure handling steps (belongs in `pipeline-handoff` skill; agents reference it).
-- [ ] No inline review process steps that duplicate a review skill.
-- [ ] Body contains only: persona, skill references, doc references, write scope, brief process overview.
-- [ ] Domain expertise lives in skills (e.g., `security-review`, `doc-review`), not inlined.
-- [ ] Every reviewer agent has a dedicated domain skill.
+An agent file is the agent's job description; a skill is reusable mechanics. They overlap by design. The audit must distinguish *real duplication* (drift hazard) from *parallel description* (different audience, different level of detail) before flagging anything.
 
-**Grep patterns to detect violations:**
+**Positive shape of a thin agent file.** A well-shaped agent body contains, in roughly this order: persona statement, skill/doc references, write scope (which files the agent may modify), a short process overview (≤7 lines naming what the agent does, not how the skill works), and any agent-specific conduct rules. Anything beyond this is a candidate for the drift test.
 
-| Pattern | Where to Search | Violation |
+**The drift test.** For each candidate finding, run this test before tagging it a violation:
+
+> If the skill changes, must the agent file also change to keep the system correct? If yes, it's duplication. If no, it's parallel description — leave it.
+
+Concretely, this means:
+
+- A skill's **checklist body, scoring table, output schema, or step-by-step process** is reusable mechanics. Copying any of these into an agent body fails the drift test → duplication. Replace with a one-line pointer.
+- An agent's **list of its own responsibilities, judgement criteria, or the transitions/gates/stages it operates on** describes the agent's surface area. The underlying skill may detail *how* each item works; the agent's list signals *what* the agent does. This passes the drift test (the skill can evolve its mechanics without changing the agent's job description) → not duplication.
+
+**Mandatory false-positive examples** — these have been wrongly flagged as duplication; do NOT flag them:
+
+- `pipeline-coordinator.md` Step 5 enumerating which schema gates which transition (PRE→SDE, SDE→implementer, etc.). The list is the coordinator's surface area, not the skill's content.
+- `system-design-expert.md` Responsibilities listing architectural validation, security/reliability, understandability, defense in depth, integration analysis. These are the SDE's judgement criteria; `design-validation` § Design Principles details *how* to apply them.
+- A reviewer agent's brief Review Process overview (≤7 lines) when the matching `*-review` skill carries a parallel section. The agent overview signals *what* the reviewer does first; the skill section is the full mechanics.
+
+**Real-duplication checklist:**
+- [ ] No verbatim copy of a skill's checklist body, scoring table, or step list (drift test fails).
+- [ ] No agent inlines a process that another agent already follows from the same skill (drift fans out across files).
+- [ ] Every reviewer agent has a dedicated domain skill (mechanics live in the skill).
+
+**Grep patterns — candidates only, run the drift test before flagging:**
+
+| Pattern | Where to Search | Likely violation when… |
 |---|---|---|
-| `\| \.scratch/` | Agent body | Inline state detection table (belongs in `pipeline-handoff` skill) |
-| `- \[ \]` | Agent body | Inline checklist (belongs in a skill) |
-| `\*\*Red\*\*.*failing test` | Agent body | Inline TDD process (belongs in `tdd-workflow` skill) |
-| `## Review Focus` | Agent body | Inline review criteria (belongs in review skill) |
-| `## PRD Boundary` | Agent body | Inline validation rules (belongs in `prd-authoring` skill) |
-| `## Output Format` with template | Agent body | Inline output template (belongs in `.claude/templates/` or skill) |
-| Numbered list 5+ steps duplicating skill | Agent body | Inline process (belongs in a skill) |
-| `## Principles` with numbered items | Agent body (design expert) | Inline design principles (belongs in `design-validation` skill) |
+| `- \[ \]` (3+ rows) | Agent body | The checkbox list mirrors a skill's checklist body. Single-row reminders are fine. |
+| `\*\*Red\*\*.*failing test` | Agent body | Restates TDD cycle mechanics from `tdd-workflow`. |
+| `## Review Focus` with criteria | Agent body | Restates a review skill's checklist. |
+| `## PRD Boundary` with rules | Agent body | Restates `prd-authoring` validation rules. |
+| `## Output Format` with full template | Agent body | Restates a template that exists in `.claude/templates/` or a skill's output contract. |
+| Numbered process 5+ steps mirroring a skill | Agent body | The agent's process is the skill's process verbatim. |
+
+Patterns that look like duplication but routinely pass the drift test (do not flag without confirming):
+- A short `## Responsibilities` or `## Process` list naming what the agent does.
+- An at-a-glance map of transitions/gates/stages keyed by schema name.
+- A pointer phrase like "see `<skill>` § X" followed by a 1-2 sentence summary of why the agent invokes that section.
 
 ### 3. Cross-Tool Parity
 
@@ -104,7 +122,7 @@ Verify state file references match across:
 - `schemas/scratch/*.json` (record schemas)
 
 Expected state files:
-- `.scratch/handoff.jsonl` (append-only; record types: `prd-entry`, `design-block`, `build-failure`, `build-pass`, `review-feedback`)
+- `.scratch/handoff.jsonl` (append-only; record types: `prd-entry`, `design-block`, `build-failure`, `build-pass`, `review-feedback`, `design-doc-autofix`)
 - `.scratch/implementation-plan.md` (feature-implementer self-tracking)
 - `.scratch/escalations.md` (feature-implementer)
 - `.scratch/eval-*.md` (coordinator via feature-eval skill)
@@ -115,6 +133,7 @@ Expected schema files (one per record type):
 - `schemas/scratch/review-feedback.schema.json`
 - `schemas/scratch/build-failure.schema.json`
 - `schemas/scratch/build-pass.schema.json`
+- `schemas/scratch/design-doc-autofix.schema.json`
 
 ### 8. Quality Gate Consistency
 

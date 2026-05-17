@@ -2,6 +2,31 @@
 
 Agent definitions for reference. Each agent has a specific role in the feature development pipeline.
 
+## Goals
+
+**Primary: code meets the bar.** The bar is the conjunction of eight clauses defined across the project's principles docs. The canonical slug list and reviewer-to-clause mapping lives in the [`review-checklist`](../skills/review-checklist/SKILL.md) skill § Quality-Bar Clause Mapping. The clauses themselves are defined here:
+
+| Slug | Defined in |
+|---|---|
+| `fit-for-purpose`, `spec-grounded`, `consistent-with-codebase` | [`docs/tdd-principles.md`](../../docs/tdd-principles.md) § Scope Discipline |
+| `legible-cold`, `tested-as-spec`, `correct` | [`docs/tdd-principles.md`](../../docs/tdd-principles.md) § Code That Reads Cold |
+| `operationally-honest`, `human-maintainable` | [`docs/tdd-principles.md`](../../docs/tdd-principles.md) § Operationally Honest |
+
+A change is not done until all eight hold; a passing test suite is necessary but not sufficient. Every pipeline change is judged first on whether it sustains or raises adherence.
+
+**Secondary: token economy and wall-clock.** Subject to meeting the bar, prefer the cheaper and faster path. Tokens and wall-clock are sister concerns — most of the practices below shorten both. When they conflict, the harness favors wall-clock for interactive work and tokens for batch.
+
+| Practice | What it means |
+|---|---|
+| **Read narrowly** | Load specific files, symbols, or ranges. Don't enumerate directories or read whole files when a targeted lookup suffices. Re-read only when state has changed. |
+| **Think proportionally** | Match deliberation to task risk. Routine changes don't need extensive planning; novel or cross-cutting changes do. Don't pad reasoning. |
+| **Draft to ship, not to impress** | No commentary explaining what the code obviously does. No restating the spec back. No preambles. Output is the artifact set, not narration about producing it. |
+| **Iterate where it pays** | Self-review passes are cheap and high-value — run them. Re-running the full task to fix something a targeted edit would handle is wasteful — don't. |
+| **Parallelize independent work** | Reviewer dispatches, independent agent calls, and independent tool calls go in a single message. |
+| **Stop at done** | Once the bar is met, stop. Polish past the bar spends tokens and wall-clock without raising quality. |
+
+When interpreting evaluation findings, fix in this order: (1) gaps that let code below the bar through, (2) waste at constant bar adherence, (3) cosmetic report quality.
+
 ## Architecture
 
 **Agents own behavior.** Each agent is a thin wrapper: persona, tool permissions, model selection. Domain expertise stays in the agent definition.
@@ -133,7 +158,7 @@ The `.scratch/` directory holds temporary files for the current feature cycle. I
 └── tmp/                      # Intermediate computation files (auto-cleaned)
 ```
 
-`handoff.jsonl` carries five record types, one JSON object per line:
+`handoff.jsonl` carries six record types, one JSON object per line:
 
 | Record `type` | Producer | Schema |
 |---|---|---|
@@ -142,6 +167,7 @@ The `.scratch/` directory holds temporary files for the current feature cycle. I
 | `build-failure` | feature-implementer | `schemas/scratch/build-failure.schema.json` |
 | `build-pass` | feature-implementer | `schemas/scratch/build-pass.schema.json` |
 | `review-feedback` | each reviewer | `schemas/scratch/review-feedback.schema.json` |
+| `design-doc-autofix` | root (coordinator) | `schemas/scratch/design-doc-autofix.schema.json` |
 
 ### File Lifecycle
 

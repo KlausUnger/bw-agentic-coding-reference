@@ -42,6 +42,8 @@ Run after each of the four reviewers has appended a `review-feedback` record wit
 | Build retry cycles | 0–3+ | Count of `build-failure` records for `req_id` since the latest `design-block` |
 | Design revisions | 0–N | Count of `design-block` records for `req_id` with `verdict: "revised"` |
 
+When reviewers raise findings with the optional `bar_clause` field set, list the clauses that were flagged in the Notes block — that surfaces which parts of the bar required rework without requiring a separate scoring pass.
+
 ## Output Format
 
 Write to `.scratch/eval-<feature-name>.md` where `<feature-name>` is the `req_id` field of the latest `type: "prd-entry"` record in `.scratch/handoff.jsonl`, lowercased (e.g. `eval-req-xx-058.md`).
@@ -71,6 +73,7 @@ Timestamp: [ISO 8601]
 
 - **Overall:** PASS / FAIL
 - **Retry cost:** [0 = clean, 1-2 = minor issues, 3 = design revision needed]
+- **Bar clauses that required rework:** [list slugs from `bar_clause`-tagged findings, or "none"]
 - **Notes:** [any observations about the pipeline run]
 ```
 

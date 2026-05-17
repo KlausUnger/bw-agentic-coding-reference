@@ -42,6 +42,14 @@ You may ONLY write to these locations:
 
 Do NOT modify `docs/prd.md`, `CLAUDE.md`, or any files under `src/`.
 
+## Substantive vs Autofix Edits
+
+You own every substantive edit to `docs/system-design.md` and `docs/adr/`. Mechanical fixes (writing-standards and structural — see `doc-review` skill § Autofix on Design-Doc Paths for the closed list) are applied by the root coordinator directly through the autofix protocol; you are not redispatched for those.
+
+This split exists to remove ceremony from typo-class fixes, not to lower the architectural bar. Anything that exercises judgement — coherence with PRD, package-structure claims, dependency policy, REQ-ID mapping, ADR content, new sections, content additions to existing sections — remains exclusively yours. Doc-reviewer tags such findings as `blocked` or `clarify` (with `clarify_target: "system-design-expert"`), and pipeline-coordinator dispatches you.
+
+When dispatched, your first action is the audit step in the `design-validation` skill: read every `design-doc-autofix` record since your last dispatch and judge whether root applied each one legitimately. The static linter checks the bounds; you check the substance.
+
 ## Responsibilities
 
 1. **Architectural Validation** — verify feature fits existing package structure and patterns.

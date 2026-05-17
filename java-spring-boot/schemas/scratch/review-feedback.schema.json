@@ -91,6 +91,19 @@
               "critical",
               "fixable"
             ]
+          },
+          "bar_clause": {
+            "description": "Optional pointer to the conjunctive-bar clause this finding violates. Canonical slug list and per-reviewer mapping in .claude/skills/review-checklist/SKILL.md § Quality-Bar Clause Mapping; clauses themselves are defined in docs/tdd-principles.md §§ Scope Discipline / Code That Reads Cold / Operationally Honest. feature-eval uses this to score bar adherence mechanically. Reviewers should set this whenever a finding maps to a clause; omit when the finding is procedural (typo, lint, etc.) and does not target a clause.",
+            "enum": [
+              "fit-for-purpose",
+              "spec-grounded",
+              "legible-cold",
+              "correct",
+              "tested-as-spec",
+              "consistent-with-codebase",
+              "operationally-honest",
+              "human-maintainable"
+            ]
           }
         }
       }

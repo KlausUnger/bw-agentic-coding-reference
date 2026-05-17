@@ -64,7 +64,7 @@
       "minItems": 1
     },
     "test_names": {
-      "description": "Go test functions expected to exist when the feature is complete. Pattern matches Go test naming (^Test[A-Z]…). At least one required so the implementer's TDD cycle has a concrete first target.",
+      "description": "Go test functions expected to exist when the feature is complete. Pattern matches Go test naming. At least one required so the implementer's TDD cycle has a concrete first target.",
       "type": "array",
       "items": {
         "type": "string",

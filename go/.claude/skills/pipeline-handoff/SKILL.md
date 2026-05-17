@@ -46,10 +46,11 @@ Each agent transition validates the inbound record(s) against a schema before di
 
 ### Common Procedure
 
-1. Read `.scratch/handoff.jsonl`. If the file is missing or empty when a record is required, the gate fails — route back to the upstream agent.
-2. Filter records by `req_id` and `type`. The **latest** record for each `(req_id, type)` is the active state.
-3. Check required fields, types, and pattern constraints per the schema.
-4. If every check passes: dispatch the next agent. If any check fails: route back upstream with a `Blocked` recommendation naming the specific failed check.
+1. **Discover.** Run `Glob .scratch/**/*` to enumerate state files. Then `Read .scratch/handoff.jsonl` only if it appears in the Glob result. Do not `Read` directories.
+2. **Gate.** If `handoff.jsonl` is missing or empty when a record is required, the gate fails — route back to the upstream agent.
+3. **Filter.** Records by `req_id` and `type`. The **latest** record for each `(req_id, type)` is the active state.
+4. **Check.** Required fields, types, and pattern constraints per the schema.
+5. **Decide.** If every check passes: dispatch the next agent. If any check fails: route back upstream with a `Blocked` recommendation naming the specific failed check.
 
 ### Gate 1: PRE → SDE (`prd-entry`)
 
@@ -86,14 +87,28 @@ Schema: [`schemas/scratch/build-pass.schema.json`](../../../schemas/scratch/buil
 
 If the latest is a `build-failure`, apply Build-Failure Recovery instead.
 
-### Gate 4: reviewers → implementer or done (`review-feedback`)
+### Gate 4: reviewers → next step (`review-feedback`)
 
-Schema: [`schemas/scratch/review-feedback.schema.json`](../../../schemas/scratch/review-feedback.schema.json). For each of the four reviewer `author` values, check the latest record for the active `req_id` since the latest `build-pass`:
+Schema: [`schemas/scratch/review-feedback.schema.json`](../../../schemas/scratch/review-feedback.schema.json). For each of the four reviewers, the latest `review-feedback` record (filtered by `req_id` and `author`) must:
 
+- Have `type == "review-feedback"`, valid `req_id` and `ts`.
+- `author` is one of: `code-quality-reviewer`, `test-reviewer`, `security-reviewer`, `doc-reviewer`.
 - `verdict` is one of: `approved`, `changes_requested`, `blocked`.
-- `findings` is an array; each finding has `tag`, `location`, `description`. `tag: "clarify"` requires `clarify_target`.
-- All four reviewers' latest verdict is `"approved"` → feature complete (load `feature-eval` skill).
-- Any reviewer's latest verdict is `"changes_requested"` or `"blocked"` → dispatch feature-implementer with the structured findings; after fixes, append fresh `build-failure`/`build-pass` and re-invoke reviewers.
+- `findings` is an array; when `verdict != "approved"`, it should be non-empty (warn but do not hard-fail; an empty findings list with a non-approved verdict means the reviewer did not produce actionable output and should be re-dispatched).
+- Each finding has `tag`, `location`, `description`. When `tag == "clarify"`, `clarify_target` is required.
+
+Routing:
+
+- All four `verdict == "approved"` → feature complete; load `feature-eval` skill.
+- Any `verdict == "changes_requested"` or `"blocked"` → split the union of findings by artifact owner (see `review-checklist` § Artifact Ownership), then dispatch each owner agent with the relevant slice. **Exception:** `tag == "autofix"` findings whose `location` is a design-doc path (`docs/system-design.md` or `docs/adr/*.md`) are applied by root directly per `review-checklist` § Root-Applied Autofix on Design Docs — they do NOT redispatch system-design-expert. Every other finding on those paths still routes to SDE.
+- Any `tag == "escalate"` finding → also append an entry to `.scratch/escalations.md`.
+
+### What the gates do NOT check
+
+- Content quality (are the acceptance criteria *good*? are the findings *correct*?). That is the consuming agent's judgement.
+- Cross-record consistency beyond `req_id` linkage (e.g. whether `design-block.primary_paths` overlaps `prd-entry.file_targets`). Consumers may surface mismatches as findings; gates do not.
+
+The gates are structural: required fields present, types correct, patterns match. Every check must catch deterministically.
 
 ## Blocking
 
@@ -137,13 +152,21 @@ See the `review-checklist` skill for feedback tag definitions and the review pro
 
 | File | Created By | Consumed By |
 |---|---|---|
-| `.scratch/handoff.jsonl` (`prd-entry` records) | product-requirements-expert | system-design-expert, feature-implementer |
-| `.scratch/handoff.jsonl` (`design-block` records) | system-design-expert | feature-implementer, coordinator |
-| `.scratch/handoff.jsonl` (`build-failure` / `build-pass` records) | feature-implementer | coordinator, system-design-expert (escalation) |
-| `.scratch/handoff.jsonl` (`review-feedback` records) | reviewer agents | feature-implementer, coordinator |
+| `.scratch/handoff.jsonl` | product-requirements-expert, system-design-expert, feature-implementer, four reviewers, root (all append-only) | coordinator (validation gates), all consumer agents |
 | `.scratch/implementation-plan.md` | feature-implementer | feature-implementer (self-tracking) |
 | `.scratch/escalations.md` | feature-implementer | Human |
 | `.scratch/eval-*.md` | coordinator (via feature-eval skill) | Human |
+
+`.scratch/handoff.jsonl` is the append-only structured handoff log; one JSON object per line, each carrying a `type` discriminator. Record types:
+
+| Record `type` | Producer | Purpose |
+|---|---|---|
+| `prd-entry` | product-requirements-expert | Active feature scope for SDE and implementer. |
+| `design-block` | system-design-expert | Architectural fit and implementation guidance. |
+| `review-feedback` | each of the four reviewer agents | Per-reviewer verdict and findings. |
+| `build-failure` | feature-implementer | Quality-gate failure with error context and retry counter. |
+| `build-pass` | feature-implementer | Quality-gate success marker. |
+| `design-doc-autofix` | root (coordinator) | Audit trail for root-applied autofixes on design-doc paths (see `review-checklist` § Root-Applied Autofix on Design Docs). |
 
 ## Human Checkpoints
 

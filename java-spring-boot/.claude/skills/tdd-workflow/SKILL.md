@@ -12,7 +12,7 @@ metadata:
   author: team
 ---
 
-For principles and rationale behind this cycle, see `docs/tdd-principles.md`.
+For principles and rationale behind this cycle — including the eight-clause bar a passing cycle must meet — see [`docs/tdd-principles.md`](../../../docs/tdd-principles.md) (§ Scope Discipline, § Code That Reads Cold, § Operationally Honest, § The Conjunctive Bar).
 
 ## TDD Cycle
 
@@ -27,6 +27,23 @@ For principles and rationale behind this cycle, see `docs/tdd-principles.md`.
 4. **Green** — write minimum code to pass.
 5. **Refactor** — clean up, keep tests green.
 6. **Next cycle** — return to step 2.
+
+## Self-Review Pass
+
+After the last TDD cycle and before invoking reviewers, walk the eight clauses of the conjunctive bar against the diff. The canonical slug list and the clauses themselves live in [`docs/tdd-principles.md`](../../../docs/tdd-principles.md) (§§ Scope Discipline, Code That Reads Cold, Operationally Honest). For each clause, ask the question and fix any honest "no":
+
+| Clause | Question |
+|---|---|
+| `fit-for-purpose` | Anything here that the spec did not ask for? |
+| `spec-grounded` | Is every change traceable to a requirement, or am I drifting? |
+| `legible-cold` | Would a stranger reading this in two years understand intent without me? |
+| `correct` | Does the code handle every spec case and every listed failure mode? |
+| `tested-as-spec` | Do test names read as the spec? Any tests of implementation detail? Any mocks inside the boundary? |
+| `consistent-with-codebase` | Does the change match neighboring patterns? Any unjustified deviations? |
+| `operationally-honest` | Do errors carry 3am-debuggable context? Is resource use reasonable? |
+| `human-maintainable` | Would this still be comfortable to own with the agents turned off? |
+
+The pass is one walk through the diff — minutes, not a record. It is mandatory because it is where most quality comes from and is far cheaper than a reviewer-driven retry. No `.scratch/` file is required; if reviewers later flag something a clause walk would have caught, the gap is yours to close in the next round.
 
 ## Document Ownership
 

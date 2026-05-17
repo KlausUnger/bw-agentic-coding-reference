@@ -25,6 +25,25 @@ The active feature scope arrives as a `type: "prd-entry"` record in `.scratch/ha
 
 **Forbidden:** re-reading `docs/prd.md` to reconstruct scope when the prd-entry record is present. The record is the contract.
 
+## Autofix Audit (Run First on Every Dispatch)
+
+Before working on the active prd-entry, audit every `type: "design-doc-autofix"` record in `.scratch/handoff.jsonl` whose `ts` is later than your most recent `type: "design-block"` record (or any such record if you have not yet been dispatched for the active `req_id`). The autofix-audit procedure in `code-quality-gate` has already re-checked the bounds (≤5 lines, ≤200 chars, no headings, no anchors, no REQ-IDs, no code-fence content, no link targets); your job is the judgement check.
+
+For each record, decide whether the change is legitimately mechanical:
+
+- **Legitimate.** Writing-standards or structural fix that doesn't smuggle in a semantic shift. Common shape: sentence shortened, anchor added, code-fence language tag added.
+- **Illegitimate.** The change reads as mechanical but moves architectural meaning — e.g. a "shortened sentence" drops a constraint, a "broken link fix" repoints to a different anchor that means something different, a "writing-standards" rewrite changes a definitional claim. These are substantive changes that escaped via mis-tagging.
+
+For every illegitimate record:
+
+1. Append a finding to your forthcoming `design-block` record's `notes` (or `risks` if you want it surfaced more loudly): `"autofix-rejected: <handoff.jsonl line N>: <reason>"`.
+2. Recommend a corrective edit in the same `design-block` (you have write access to design docs; apply the correction yourself).
+3. The autofix-audit procedure in `code-quality-gate` re-checks bounds on every gate run; repeat offenders surface as `design-doc-autofix` audit failures and bounce back to system-design-expert for revert-or-redo.
+
+If every audited record is legitimate, skip silently — no entry needed.
+
+If `.scratch/handoff.jsonl` contains no `design-doc-autofix` records, skip silently.
+
 ## Output Contract
 
 Append one `design-block` record to `.scratch/handoff.jsonl` per dispatch. Schema: [`schemas/scratch/design-block.schema.json`](../../../schemas/scratch/design-block.schema.json).

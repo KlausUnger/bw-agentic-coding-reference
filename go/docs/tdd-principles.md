@@ -41,6 +41,43 @@ TDD gives agents three things they lack by default:
 
 Without TDD, agents write multiple functions before any test exists, guess at requirements, and produce code that passes no tests on first run.
 
+## Scope Discipline
+
+The Green Phase rule "write the minimum code to make the failing test pass" combines with three additional scope rules. They apply to every cycle, not just Green.
+
+| Rule | Slug | What it means |
+|---|---|---|
+| **Fit-for-purpose** | `fit-for-purpose` | Solves the stated problem, nothing more. No speculative generality. **No abstractions without two real call sites** — wait for the second use before introducing the abstraction. No defensive code for impossible cases — boundary validation belongs at boundaries; internal code trusts its contracts. |
+| **Spec-grounded** | `spec-grounded` | Work starts from a clear outcome and stays within stated scope. If the spec is ambiguous, ask before coding (route through `product-requirements-expert` per the Design Check Gate). Drift outside scope is surfaced via the Feedback Log, not silently absorbed. |
+| **Consistent with the codebase** | `consistent-with-codebase` | Matches existing patterns, naming, and conventions before introducing new ones. Read neighboring code before writing. Deviations are justified inline. |
+
+The slugs feed the `bar_clause` field on `review-feedback` records — they are not decorative.
+
+## Code That Reads Cold
+
+The Red and Green phases produce tests and code; the Refactor phase has one job beyond keeping tests green: ensure the result reads cold. A competent engineer reading the code in two years, without context, should understand what it does and why.
+
+| Rule | Slug | What it means |
+|---|---|---|
+| **Legible cold** | `legible-cold` | Names are accurate. Structure reflects intent. Non-obvious decisions carry a why-comment or an ADR. Comments explain WHY, not WHAT — well-named identifiers cover the WHAT. |
+| **Tested as specification** | `tested-as-spec` | See [`testing-principles.md`](testing-principles.md) — test names read as a specification of the system; no tests of implementation detail; no mocks of internal code. |
+| **Correct under stated conditions** | `correct` | Behaves correctly for every case in the spec, including listed failure modes. Boundaries validate inputs; internal code trusts its contracts. See [`testing-principles.md`](testing-principles.md) § Edge Case and Boundary Testing for the test side. |
+
+## Operationally Honest
+
+Code that passes tests can still fail in production. Two properties guard against this.
+
+| Rule | Slug | What it means |
+|---|---|---|
+| **Operationally honest** | `operationally-honest` | Errors carry actionable context for the person debugging at 3am (see [`ddd-principles.md`](ddd-principles.md) § Error Handling). Resource use (memory, I/O, external calls, cost) is reasonable for the workload. Rollback is possible — for breaking or stateful changes, a rollback note lives in the commit message body (a `Rollback:` footer) for simple cases, or in an ADR alongside the change for procedures that need standalone documentation. See [`ddd-principles.md`](ddd-principles.md) § Operational Honesty for the criteria. |
+| **Human-maintainable without the agent** | `human-maintainable` | If the agents were turned off tomorrow, the code would still be comfortable to own. No artifacts that only make sense to re-prompt: no comments addressed to future agents, no scaffolding that depends on the harness being present, no code shape that requires regenerating rather than editing. |
+
+## The Conjunctive Bar
+
+A change is not done unless **all** eight clauses above (`fit-for-purpose`, `spec-grounded`, `legible-cold`, `correct`, `tested-as-spec`, `consistent-with-codebase`, `operationally-honest`, `human-maintainable`) hold. A passing test suite is necessary but not sufficient.
+
+The self-review pass before the quality gate (`tdd-workflow` § Self-Review Pass) walks the eight clauses against the diff. The four reviewer agents tag findings with the violated clause via `bar_clause` on `review-feedback` findings, and `feature-eval` surfaces the flagged clauses in the scorecard's Notes block. The canonical slug list and the typical reviewer-to-clause mapping live in the `review-checklist` skill § Quality-Bar Clause Mapping.
+
 ## Red Phase Rules
 
 - Write exactly one test that fails.
